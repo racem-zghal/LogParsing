@@ -7,7 +7,7 @@ export class LogParser {
       new ParsingRule(
         "Test Case Start",
         /^(.+\.py::\w+::\w+)\s/,
-        "#00FF00" 
+        "#00AA00" // Vert pour les succès
       ),
       new ParsingRule(
         "Detailed Log Line",
@@ -17,175 +17,182 @@ export class LogParser {
     ];
     this.highlightDefinitions = [];
     this.currentTestCase = null;
-    this.testCaseResults = new Map(); 
+    this.testCaseResults = new Map();
     
-    fetch('public/config/highlight-rules.json').then(res => res.json()).then(data => {
-      this.highlightDefinitions = data;
-    });
+    this.loadHighlightRules();
+  }
+
+  async loadHighlightRules() {
+    try {
+      const response = await fetch('/config/highlight-rules.json');
+      this.highlightDefinitions = await response.json();
+    } catch (err) {
+      console.error("Failed to load highlight rules:", err);
+      this.highlightDefinitions = [
+        {
+          name: "AssertionFailed",
+          pattern: "\\[Assert FAILED\\]|AssertionError|assertion.*failed",
+          type: "assertion",
+          color: "#FF8800"
+        },
+        {
+          name: "ExceptionFailed",
+          pattern: "\\[Expect FAILED\\]|Exception|expect.*failed",
+          type: "exception",
+          color: "#FF8800"
+        }
+      ];
+    }
   }
 
   parse(rawText) {
     const lines = rawText.split(/\r?\n/);
     const entries = [];
     
-    // Premier passage : identifier tous les test cases et leurs résultats
     this.analyzeTestCases(lines);
 
     for (const line of lines) {
-      let matched = false;
+      if (!line.trim()) continue;
 
-      for (const rule of this.parsingRules) {
-        const match = line.match(rule.regex);
-        if (match) {
-          
-          // Vérifier si c'est un début de test case
-          if (rule.name === "Test Case Start") {
-            const testCasePath = match[1];
-            this.currentTestCase = testCasePath;
-            
-            const highlightTokens = this.detectHighlights(line);
-            const hasFailures = this.testCaseResults.get(testCasePath) || false;
-            
-            entries.push(
-              new LogEntry({
-                timestamp: "",
-                level: "INFO",
-                module: "",
-                message: line,
-                category: "testcase",
-                testCaseStatus: hasFailures ? "failed" : "passed",
-                highlightTokens: highlightTokens
-              })
-            );
-            
-            console.log(`[testcase-${hasFailures ? 'failed' : 'passed'}] ${line}`);
-            matched = true;
-            break;
-          }
-          
-          // Traitement des lignes de log détaillées
-          if (rule.name === "Detailed Log Line") {
-            const level = match[2];
-            const message = match[4];
-            const highlightTokens = this.detectHighlights(message);
-            let category = "standard";
-            
-            if (highlightTokens.find(t => t.type === "assertion")) {
-              category = "assertion";
-            } else if (highlightTokens.find(t => t.type === "exception")) {
-              category = "exception";
-            }
-
-            entries.push(
-              new LogEntry({
-                timestamp: match[1],
-                level: this.mapLevel(level),
-                module: match[3],
-                message: message,
-                category: category,
-                currentTestCase: this.currentTestCase,
-                highlightTokens: highlightTokens
-              })
-            );
-            
-            console.log(`[${category}] ${message}`);
-            matched = true;
-            break;
-          }
-        }
-      }
-
-      if (!matched && line.trim()) {
-        const highlightTokens = this.detectHighlights(line);
-
-        let category = "standard";
-        if (highlightTokens.find(t => t.type === "assertion")) {
-          category = "assertion";
-        } else if (highlightTokens.find(t => t.type === "exception")) {
-          category = "exception";
-        }
-
-        entries.push(
-          new LogEntry({
-            timestamp: "",
-            level: "INFO",
-            module: "",
-            message: line,
-            category: category,
-            currentTestCase: this.currentTestCase,
-            highlightTokens: highlightTokens
-          })
-        );
-        
-        console.log(`[${category}] ${line}`);
-      }
+      let entry = this.processLine(line);
+      if (entry) entries.push(entry);
     }
 
     return entries;
   }
 
-  // Nouvelle méthode pour analyser les test cases et leurs résultats
-  analyzeTestCases(lines) {
-    let currentTestCase = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Détecter le début d'un test case
-      const testCaseMatch = line.match(/^(.+\.py::\w+::\w+)\s/);
-      if (testCaseMatch) {
-        currentTestCase = testCaseMatch[1];
-        this.testCaseResults.set(currentTestCase, false); // Initialement pas d'échec
-        continue;
-      }
-      
-      // Si on est dans un test case, vérifier les échecs
-      if (currentTestCase) {
-        const hasAssertion = this.detectHighlights(line).find(t => t.type === "assertion");
-        const hasException = this.detectHighlights(line).find(t => t.type === "exception");
-        
-        if (hasAssertion || hasException) {
-          this.testCaseResults.set(currentTestCase, true); // Marquer comme échoué
-        }
-        
-        // Détecter le début d'un nouveau test case pour arrêter l'analyse du précédent
-        const nextTestCaseMatch = line.match(/^(.+\.py::\w+::\w+)\s/);
-        if (nextTestCaseMatch && nextTestCaseMatch[1] !== currentTestCase) {
-          currentTestCase = nextTestCaseMatch[1];
-          this.testCaseResults.set(currentTestCase, false);
-        }
+  processLine(line) {
+    for (const rule of this.parsingRules) {
+      const match = line.match(rule.regex);
+      if (!match) continue;
+
+      if (rule.name === "Test Case Start") {
+        return this.processTestCase(line, match);
+      } else if (rule.name === "Detailed Log Line") {
+        return this.processDetailedLine(line, match);
       }
     }
+
+    return this.processUnmatchedLine(line);
+  }
+
+  processTestCase(line, match) {
+    const testCasePath = match[1];
+    this.currentTestCase = testCasePath;
+    const hasFailures = this.testCaseResults.get(testCasePath) || false;
+    const highlightTokens = this.detectHighlights(line);
+
+    return new LogEntry({
+      timestamp: "",
+      level: "INFO",
+      module: "",
+      message: line,
+      category: "testcase",
+      testCaseStatus: hasFailures ? "failed" : "passed",
+      highlightTokens: highlightTokens,
+      customColor: hasFailures ? "#FF0000" : "#00AA00"
+    });
+  }
+
+  processDetailedLine(line, match) {
+    const message = match[4];
+    const highlightTokens = this.detectHighlights(message);
+    const category = this.determineCategory(highlightTokens);
+
+    return new LogEntry({
+      timestamp: match[1],
+      level: this.mapLevel(match[2]),
+      module: match[3],
+      message: message,
+      category: category,
+      currentTestCase: this.currentTestCase,
+      highlightTokens: highlightTokens
+    });
+  }
+
+  processUnmatchedLine(line) {
+    const highlightTokens = this.detectHighlights(line);
+    const category = this.determineCategory(highlightTokens);
+
+    return new LogEntry({
+      timestamp: "",
+      level: "INFO",
+      module: "",
+      message: line,
+      category: category,
+      currentTestCase: this.currentTestCase,
+      highlightTokens: highlightTokens
+    });
+  }
+
+  determineCategory(highlightTokens) {
+    if (highlightTokens.some(t => t.type === "assertion")) return "assertion";
+    if (highlightTokens.some(t => t.type === "exception")) return "exception";
+    return "standard";
+  }
+
+  analyzeTestCases(lines) {
+    let currentTestCase = null;
+    let testCaseLines = [];
+    
+    for (const line of lines) {
+      const testCaseMatch = line.match(/^(.+\.py::\w+::\w+)\s/);
+      if (testCaseMatch) {
+        if (currentTestCase !== null) {
+          this.testCaseResults.set(currentTestCase, this.hasTestFailed(testCaseLines));
+        }
+        currentTestCase = testCaseMatch[1];
+        testCaseLines = [line];
+      } else if (currentTestCase !== null) {
+        testCaseLines.push(line);
+      }
+    }
+    
+    if (currentTestCase !== null) {
+      this.testCaseResults.set(currentTestCase, this.hasTestFailed(testCaseLines));
+    }
+  }
+
+  hasTestFailed(lines) {
+    return lines.some(line => {
+      const tokens = this.detectHighlights(line);
+      return tokens.some(t => t.type === "assertion" || t.type === "exception") ||
+             line.includes("AssertionError") ||
+             line.includes("assert failed") ||
+             line.includes("expect failed") ||
+             line.includes("Exception") ||
+             line.includes("Error:");
+    });
   }
 
   detectHighlights(text) {
     const tokens = [];
     for (const rule of this.highlightDefinitions) {
-      const regex = new RegExp(rule.pattern, "gi");
-      let match;
-      while ((match = regex.exec(text)) !== null) {
-        tokens.push({
-          start: match.index,
-          end: match.index + match[0].length,
-          type: rule.type
-        });
+      try {
+        const regex = new RegExp(rule.pattern, "gi");
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          tokens.push({
+            start: match.index,
+            end: match.index + match[0].length,
+            type: rule.type,
+            color: rule.color
+          });
+        }
+      } catch (e) {
+        console.error("Invalid regex pattern:", rule.pattern, e);
       }
     }
     return tokens;
   }
 
   mapLevel(level) {
-    switch (level.toUpperCase()) {
-      case "ERR":
-        return "ERROR";
-      case "INF":
-        return "INFO";
-      case "WRN":
-        return "WARNING";
-      case "DBG":
-        return "DEBUG";
-      default:
-        return level;
-    }
+    const levelMap = {
+      "ERR": "ERROR",
+      "INF": "INFO",
+      "WRN": "WARNING",
+      "DBG": "DEBUG"
+    };
+    return levelMap[level.toUpperCase()] || level;
   }
 }

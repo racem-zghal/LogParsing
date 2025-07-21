@@ -1,10 +1,9 @@
-// LogEntry.js
 export class LogEntry {
   constructor({ 
-    timestamp = "", 
-    level = "INFO", 
-    module = "", 
-    message = "", 
+    timestamp, 
+    level, 
+    module, 
+    message, 
     category = "standard", 
     highlightTokens = [],
     testCaseStatus = null,
@@ -16,59 +15,49 @@ export class LogEntry {
     this.message = message;
     this.category = category;
     this.highlightTokens = highlightTokens;
-    this.testCaseStatus = testCaseStatus;
-    this.currentTestCase = currentTestCase;
+    this.testCaseStatus = testCaseStatus; // "passed", "failed", or null
+    this.currentTestCase = currentTestCase; // Le test case actuel en cours
+    this.isTestFailure = category === "assertion" || category === "exception";
     this.isTestCase = category === "testcase";
-    this.isTestFailure = this.isTestCase ? 
-      testCaseStatus === "failed" : 
-      (category === "assertion" || category === "exception");
   }
 
+  // Méthode pour obtenir la couleur de fond selon la catégorie
   getBackgroundColor() {
-    const colors = {
-      testcase: {
-        failed: "#FFE6E6",
-        passed: "#E6FFE6"
-      },
-      assertion: "#FFE6CC",
-      exception: "#FFE6CC",
-      standard: "#FFFFFF"
-    };
-    
-    return this.isTestCase ? 
-      colors.testcase[this.testCaseStatus] : 
-      colors[this.category] || colors.standard;
+    switch (this.category) {
+      case "testcase":
+        return this.testCaseStatus === "failed" ? "#FFE6E6" : "#E6FFE6"; // Rouge clair ou vert clair
+      case "assertion":
+      case "exception":
+        return "#FFE6CC"; // Orange clair
+      default:
+        return "#FFFFFF"; // Blanc par défaut
+    }
   }
 
+  // Méthode pour obtenir la couleur de bordure
   getBorderColor() {
-    const colors = {
-      testcase: {
-        failed: "#FF0000",
-        passed: "#00AA00"
-      },
-      assertion: "#FF8800",
-      exception: "#FF8800",
-      standard: "#CCCCCC"
-    };
-    
-    return this.isTestCase ? 
-      colors.testcase[this.testCaseStatus] : 
-      colors[this.category] || colors.standard;
+    switch (this.category) {
+      case "testcase":
+        return this.testCaseStatus === "failed" ? "#FF0000" : "#00AA00"; // Rouge ou vert
+      case "assertion":
+      case "exception":
+        return "#FF8800"; // Orange
+      default:
+        return "#CCCCCC"; // Gris par défaut
+    }
   }
 
+  // Méthode pour obtenir l'icône appropriée
   getIcon() {
-    const icons = {
-      testcase: {
-        failed: "❌",
-        passed: "✅"
-      },
-      assertion: "⚠️",
-      exception: "🔥",
-      standard: ""
-    };
-    
-    return this.isTestCase ? 
-      icons.testcase[this.testCaseStatus] : 
-      icons[this.category] || icons.standard;
+    switch (this.category) {
+      case "testcase":
+        return this.testCaseStatus === "failed" ? "❌" : "✅";
+      case "assertion":
+        return "⚠️";
+      case "exception":
+        return "🔥";
+      default:
+        return "";
+    }
   }
 }

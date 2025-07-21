@@ -34,14 +34,12 @@
             </div>
           </div>
           
-          <ul ref="failedTestsList">
+          <ul>
             <li 
               v-for="(testCase, index) in failedTestCases" 
               :key="index" 
               @click="scrollToTestCase(testCase)"
               class="failed-test-item"
-              :class="{ 'active-test': activeTestCase === testCase }"
-              :ref="'testCase-' + testCase"
             >
               <span class="test-icon">❌</span>
               {{ testCase }}
@@ -50,14 +48,12 @@
           
           <div v-if="passedTestCases.length > 0" class="passed-section">
             <h4>✅ Passed Test Cases</h4>
-            <ul ref="passedTestsList">
+            <ul>
               <li 
                 v-for="(testCase, index) in passedTestCases" 
                 :key="index" 
                 @click="scrollToTestCase(testCase)"
                 class="passed-test-item"
-                :class="{ 'active-test': activeTestCase === testCase }"
-                :ref="'testCase-' + testCase"
               >
                 <span class="test-icon">✅</span>
                 {{ testCase }}
@@ -85,7 +81,9 @@
             </span>
           </div>
         </div>
-        <div class="log-content" v-html="formattedRawLog"></div>
+        <div class="log-content">
+          <pre class="log-raw-content" v-html="formattedLog"></pre>
+        </div>
       </div>
     </div>
   </div>
@@ -99,112 +97,39 @@ export default {
     return {
       logData: '',
       parsedEntries: [],
-      sidebarVisible: true,
+      sidebarVisible: false,
       failedTestCases: [],
       passedTestCases: [],
       totalTestCases: 0,
-      logParser: null,
-      rawLogLines: [],
-      activeTestCase: null
+      logParser: null
     };
   },
   computed: {
-    formattedRawLog() {
+    formattedLog() {
       if (!this.logData) return '';
       
-      const lines = this.logData.split(/\r?\n/);
-      let processedLines = [];
+      // Retourner le contenu brut du fichier avec juste les highlights essentiels
+      let content = this.escapeHtml(this.logData);
       
-      try {
-        // Si LogParser est disponible, utiliser ses informations pour le surlignage
-        if (this.logParser && this.parsedEntries.length > 0) {
-          let currentEntryIndex = 0;
-          
-          lines.forEach((line, lineIndex) => {
-            let highlightedLine = line;
+      // Appliquer uniquement les highlights pour les éléments critiques si nécessaire
+      if (this.parsedEntries.length > 0) {
+        this.parsedEntries.forEach((entry, index) => {
+          if (entry.isTestCase) {
+            const testCaseId = `testcase-${index}`;
+            const originalMessage = this.escapeHtml(entry.message);
+            const backgroundColor = entry.getBackgroundColor();
+            const borderColor = entry.getBorderColor();
             
-            // Chercher si cette ligne correspond à une entrée parsée
-            if (currentEntryIndex < this.parsedEntries.length) {
-              const entry = this.parsedEntries[currentEntryIndex];
-              
-              // Vérifier si la ligne actuelle contient le message de l'entrée
-              if (line.includes(entry.message) || entry.message.includes(line.trim())) {
-                // Appliquer les highlights
-                highlightedLine = this.applyHighlights(line, entry.highlightTokens);
-                
-                // Déterminer la couleur de fond et bordure
-                const backgroundColor = entry.getBackgroundColor();
-                const borderColor = entry.getBorderColor();
-                const icon = entry.getIcon();
-                
-                let cssClass = '';
-                if (entry.isTestCase) {
-                  cssClass = entry.testCaseStatus === 'failed' ? 'testcase-failed' : 'testcase-passed';
-                } else if (entry.category === 'assertion' || entry.category === 'exception') {
-                  cssClass = 'assertion-line';
-                }
-                
-                processedLines.push(`
-                  <div 
-                    class="raw-log-line ${cssClass}" 
-                    style="
-                      background-color: ${backgroundColor}; 
-                      border-left: 4px solid ${borderColor}; 
-                      padding: 4px 8px; 
-                      margin: 1px 0;
-                    "
-                  >
-                    <span class="line-number">${lineIndex + 1}</span>
-                    <span class="entry-icon">${icon}</span>
-                    <span class="line-content">${highlightedLine}</span>
-                  </div>
-                `);
-                
-                currentEntryIndex++;
-              } else {
-                // Ligne normale sans traitement spécial
-                processedLines.push(`
-                  <div class="raw-log-line">
-                    <span class="line-number">${lineIndex + 1}</span>
-                    <span class="line-content">${this.escapeHtml(line)}</span>
-                  </div>
-                `);
-              }
-            } else {
-              // Ligne normale sans traitement spécial
-              processedLines.push(`
-                <div class="raw-log-line">
-                  <span class="line-number">${lineIndex + 1}</span>
-                  <span class="line-content">${this.escapeHtml(line)}</span>
-                </div>
-              `);
-            }
-          });
-        } else {
-          // Si pas de LogParser, afficher le contenu brut simple
-          lines.forEach((line, lineIndex) => {
-            processedLines.push(`
-              <div class="raw-log-line">
-                <span class="line-number">${lineIndex + 1}</span>
-                <span class="line-content">${this.escapeHtml(line)}</span>
-              </div>
-            `);
-          });
-        }
-      } catch (error) {
-        console.warn('Error processing log with highlights:', error);
-        // Fallback : affichage simple
-        lines.forEach((line, lineIndex) => {
-          processedLines.push(`
-            <div class="raw-log-line">
-              <span class="line-number">${lineIndex + 1}</span>
-              <span class="line-content">${this.escapeHtml(line)}</span>
-            </div>
-          `);
+            // Remplacer la ligne originale par une version avec ID pour la navigation
+            content = content.replace(
+              originalMessage,
+              `<span class="log-entry" id="${testCaseId}" style="background-color: ${backgroundColor}; border-left: 4px solid ${borderColor}; display: block; padding-left: 8px;">${originalMessage}</span>`
+            );
+          }
         });
       }
       
-      return processedLines.join('');
+      return content;
     }
   },
   methods: {
@@ -225,36 +150,29 @@ export default {
       const reader = new FileReader();
       reader.onload = (e) => {
         this.logData = e.target.result;
-        this.processLogData();
+        this.parseLogData();
       };
       reader.readAsText(file);
     },
     
-    processLogData() {
-      this.rawLogLines = this.logData.split(/\r?\n/);
-      this.parseLogData();
-    },
-    
     parseLogData() {
-      try {
-        this.logParser = new LogParser();
-        this.parsedEntries = this.logParser.parse(this.logData);
-        this.extractTestCaseInfo();
-      } catch (error) {
-        console.warn('LogParser not available or error parsing:', error);
-        this.parsedEntries = [];
-        this.failedTestCases = [];
-        this.passedTestCases = [];
-        this.totalTestCases = 0;
-      }
+      // Initialiser le parser seulement pour extraire les informations des tests
+      // sans modifier le contenu original
+      this.logParser = new LogParser();
+      
+      // Parser les données pour extraire les informations nécessaires à la navigation
+      this.parsedEntries = this.logParser.parse(this.logData);
+      
+      // Extraire les informations des test cases pour la sidebar
+      this.extractTestCaseInfo();
     },
     
-    extactTestCaseInfo() {
+    extractTestCaseInfo() {
       const failedTests = new Set();
       const passedTests = new Set();
       let totalTests = 0;
       
-      this.parsedEntries.forEach((entry) => {
+      this.parsedEntries.forEach(entry => {
         if (entry.isTestCase) {
           totalTests++;
           const testCaseName = this.extractTestCaseName(entry.message);
@@ -277,14 +195,21 @@ export default {
       return match ? match[1] : message;
     },
     
+    escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    },
+    
     applyHighlights(message, highlightTokens) {
       if (!highlightTokens || highlightTokens.length === 0) {
-        return this.escapeHtml(message);
+        return message;
       }
       
+      // Trier les tokens par position pour éviter les conflits
       const sortedTokens = highlightTokens.sort((a, b) => b.start - a.start);
-      let result = this.escapeHtml(message);
       
+      let result = message;
       sortedTokens.forEach(token => {
         const before = result.substring(0, token.start);
         const highlighted = result.substring(token.start, token.end);
@@ -292,11 +217,20 @@ export default {
         
         let cssClass = '';
         switch (token.type) {
-          case 'assertion': cssClass = 'highlight-assertion'; break;
-          case 'exception': cssClass = 'highlight-exception'; break;
-          case 'error': cssClass = 'highlight-error'; break;
-          case 'warning': cssClass = 'highlight-warning'; break;
-          default: cssClass = 'highlight-default';
+          case 'assertion':
+            cssClass = 'highlight-assertion';
+            break;
+          case 'exception':
+            cssClass = 'highlight-exception';
+            break;
+          case 'error':
+            cssClass = 'highlight-error';
+            break;
+          case 'warning':
+            cssClass = 'highlight-warning';
+            break;
+          default:
+            cssClass = 'highlight-default';
         }
         
         result = before + `<span class="${cssClass}">${highlighted}</span>` + after;
@@ -306,9 +240,7 @@ export default {
     },
     
     scrollToTestCase(testCaseName) {
-      this.activeTestCase = testCaseName;
-      
-      // Scroll dans le contenu principal
+      // Trouver l'entrée correspondante dans le contenu original
       const entryIndex = this.parsedEntries.findIndex(entry => 
         entry.isTestCase && this.extractTestCaseName(entry.message) === testCaseName
       );
@@ -318,33 +250,35 @@ export default {
         if (element) {
           element.scrollIntoView({ 
             behavior: 'smooth', 
-            block: 'start',
+            block: 'center',
             inline: 'nearest'
           });
           
-          element.classList.add('highlighted');
+          // Ajouter un effet de surbrillance temporaire
+          element.style.backgroundColor = 'rgba(52, 152, 219, 0.3)';
+          element.style.transition = 'background-color 0.3s';
+          
           setTimeout(() => {
-            element.classList.remove('highlighted');
+            const entry = this.parsedEntries[entryIndex];
+            element.style.backgroundColor = entry.getBackgroundColor();
           }, 2000);
+        } else {
+          // Si l'élément avec ID n'est pas trouvé, chercher dans le texte brut
+          const logContent = document.querySelector('.log-raw-content');
+          if (logContent && logContent.textContent.includes(testCaseName)) {
+            // Faire défiler vers le début du contenu contenant le test case
+            const textPosition = logContent.textContent.indexOf(testCaseName);
+            if (textPosition !== -1) {
+              // Calculer approximativement la position de défilement
+              const lines = logContent.textContent.substring(0, textPosition).split('\n').length;
+              const lineHeight = 14.4; // 12px * 1.2 line-height
+              const scrollPosition = lines * lineHeight - logContent.clientHeight / 2;
+              
+              logContent.scrollTop = Math.max(0, scrollPosition);
+            }
+          }
         }
       }
-      
-      // Scroll dans la sidebar
-      this.$nextTick(() => {
-        const testCaseRef = this.$refs[`testCase-${testCaseName}`];
-        if (testCaseRef && testCaseRef[0]) {
-          testCaseRef[0].scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest'
-          });
-        }
-      });
-    },
-    
-    escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     },
     
     toggleSidebar() {
@@ -381,7 +315,7 @@ export default {
 
 .main-content {
   display: flex;
-  height: calc(100vh - 40px);
+  height: 100%;
   position: relative;
 }
 
@@ -415,7 +349,7 @@ export default {
   overflow-y: auto;
   border-radius: 8px;
   flex-shrink: 0;
-  height: calc(100% - 50px);
+  height: 100%;
 }
 
 .sidebar h3, .sidebar h4 {
@@ -456,28 +390,20 @@ export default {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: calc(100% - 200px);
-  overflow-y: auto;
 }
 
 .sidebar li {
-  padding: 8px 12px;
+  padding: 8px 0;
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
-  transition: all 0.2s;
-  margin: 2px 0;
-  border-radius: 4px;
+  transition: background-color 0.2s;
 }
 
 .sidebar li:hover {
   background: rgba(255, 255, 255, 0.1);
-}
-
-.sidebar li.active-test {
-  background: rgba(52, 152, 219, 0.3);
-  font-weight: bold;
+  border-radius: 4px;
 }
 
 .test-icon {
@@ -509,7 +435,7 @@ export default {
 }
 
 .log-header h3 {
-  margin: 0 0 15px 0;
+  margin: 0 0 10px 0;
 }
 
 .legend {
@@ -549,127 +475,64 @@ export default {
 
 .log-content {
   flex-grow: 1;
-  overflow-y: auto;
-  padding: 20px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.raw-log-line {
-  display: flex;
-  align-items: flex-start;
-  border-bottom: 1px solid #f1f3f4;
-  min-height: 20px;
-  transition: background-color 0.2s;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-}
-
-.raw-log-line:hover {
-  background-color: #f8f9fa;
-}
-
-.line-number {
-  background: #e9ecef;
-  color: #6c757d;
-  padding: 4px 12px;
-  font-size: 11px;
-  min-width: 60px;
-  text-align: right;
-  border-right: 1px solid #dee2e6;
-  flex-shrink: 0;
-  user-select: none;
-}
-
-.line-content {
-  padding: 4px 12px;
-  white-space: pre;
-  word-break: break-all;
-  flex-grow: 1;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
-}
-
-.log-entry {
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  transition: all 0.3s ease;
+  overflow: auto;
+  padding: 0;
   position: relative;
 }
 
-.log-entry.highlighted {
-  transform: scale(1.02);
-  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
-  z-index: 10;
+/* Styles pour préserver le format exact du fichier log */
+.log-raw-content {
+  font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: 1.2;
+  margin: 0;
+  padding: 20px;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  outline: none;
+  position: relative;
+  tab-size: 4;
+  -moz-tab-size: 4;
 }
 
-.entry-icon {
-  margin-right: 8px;
-  font-size: 14px;
+/* Styles pour les entrées de log identifiées (pour navigation uniquement) */
+.log-entry {
+  transition: background-color 0.3s ease;
 }
 
-.highlight-assertion {
-  background-color: #FF8800;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: bold;
-}
+/* Pas d'autres modifications visuelles pour préserver l'aspect original */
 
-.highlight-exception {
-  background-color: #e74c3c;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: bold;
-}
+/* Suppression des styles de highlight pour préserver le texte original */
+/* Seuls les éléments de test case auront une bordure subtile pour la navigation */
 
-.highlight-error {
-  background-color: #c0392b;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: bold;
-}
-
-.highlight-warning {
-  background-color: #f39c12;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: bold;
-}
-
-.highlight-default {
-  background-color: #95a5a6;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 3px;
-}
-
+/* Styles spécifiques pour les types de test cases - très subtils */
 .testcase-passed {
-  border-left-width: 6px !important;
+  border-left: 3px solid rgba(46, 204, 113, 0.3) !important;
 }
 
 .testcase-failed {
-  border-left-width: 6px !important;
+  border-left: 3px solid rgba(231, 76, 60, 0.3) !important;
 }
 
-.assertion-line {
-  border-left-width: 3px !important;
-  margin-left: 10px;
+/* Animation pour les nouveaux éléments */
+.log-entry {
+  animation: fadeIn 0.3s ease-in;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(-5px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
+/* Responsive design */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
@@ -685,5 +548,30 @@ export default {
     flex-direction: column;
     gap: 10px;
   }
+  
+  .log-raw-content {
+    font-size: 11px;
+    padding: 15px;
+  }
+}
+
+/* Scrollbar styling pour WebKit browsers */
+.log-content::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.log-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 6px;
+}
+
+.log-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 6px;
+}
+
+.log-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>
