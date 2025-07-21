@@ -1,0 +1,17 @@
+{
+  "name": "log-parsing",
+  "version": "1.0.0",
+  "description": "Application Node.js pour parser et surligner des fichiers .log",
+  "main": "parser/Log_Parser.js",
+  "type": "module",
+  "scripts": {
+    "start": "node tests/test-parser.js"
+  },
+  "keywords": [
+    "log",
+    "parsing",
+    "highlight"
+  ],
+  "author": "Ton Nom",
+  "license": "ISC"
+}
