@@ -1,7 +1,7 @@
 export class ParsingRule{
-    constructor(name , regex , hilightColor){
+    constructor(name , regex ){
         this.name=name;
         this.regex=regex;
-        this.hilightColor=hilightColor;
+    
     }
 }

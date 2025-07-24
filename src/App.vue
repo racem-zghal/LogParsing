@@ -62,35 +62,33 @@
           </div>
         </div>
       </div>
-
       <div class="log-display">
         <div class="log-header">
-          <h3>Log Analysis Results</h3>
           <div class="legend">
-            <span class="legend-item">
-              <span class="legend-color testcase-passed"></span>
-              Test Case Passed
-            </span>
-            <span class="legend-item">
-              <span class="legend-color testcase-failed"></span>
-              Test Case Failed
-            </span>
-            <span class="legend-item">
-              <span class="legend-color assertion-highlight"></span>
-              Assertion/Exception
-            </span>
+            <span class="legend-item"></span>
+            <span class="legend-item"></span>
+            <span class="legend-item"></span>
           </div>
         </div>
         <div class="log-content">
           <pre class="log-raw-content" v-html="formattedLog"></pre>
+
+       
         </div>
       </div>
     </div>
   </div>
+  
 </template>
 
 <script>
 import { LogParser } from './parser/LogParser.js';
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 
 export default {
   data() {
@@ -104,34 +102,34 @@ export default {
       logParser: null
     };
   },
-  computed: {
-    formattedLog() {
-      if (!this.logData) return '';
-      
-      // Retourner le contenu brut du fichier avec juste les highlights essentiels
-      let content = this.escapeHtml(this.logData);
-      
-      // Appliquer uniquement les highlights pour les éléments critiques si nécessaire
-      if (this.parsedEntries.length > 0) {
-        this.parsedEntries.forEach((entry, index) => {
-          if (entry.isTestCase) {
-            const testCaseId = `testcase-${index}`;
-            const originalMessage = this.escapeHtml(entry.message);
-            const backgroundColor = entry.getBackgroundColor();
-            const borderColor = entry.getBorderColor();
-            
-            // Remplacer la ligne originale par une version avec ID pour la navigation
-            content = content.replace(
-              originalMessage,
-              `<span class="log-entry" id="${testCaseId}" style="background-color: ${backgroundColor}; border-left: 4px solid ${borderColor}; display: block; padding-left: 8px;">${originalMessage}</span>`
-            );
-          }
-        });
-      }
-      
-      return content;
+ computed: {
+  formattedLog() {
+  if (!this.logData) return '';
+
+  return this.parsedEntries.map((entry, idx) => {
+    const lineRaw = escapeHtml(entry.rawLine || entry.message); 
+    let line = lineRaw
+
+    if (entry.highlightTokens?.length) {
+      line = this.applyHighlights(line, entry.highlightTokens);
     }
-  },
+
+    if (entry.isTestCase) {
+      return `<pre class="log-entry testcase-${entry.testCaseStatus}" 
+                   id="testcase-${idx}"
+                   style="border-left-color: ${entry.getBorderColor()};
+                          background: ${entry.getBackgroundColor()};
+                          margin: 0;">
+                ${line}
+              </pre>`;
+    }
+
+    return `<pre class="log-entry" style="margin: 0;">${line}</pre>`;
+  }).join('');
+}
+
+}
+,
   methods: {
     handleFileUpload(event) {
       const file = event.target.files[0];
@@ -154,16 +152,10 @@ export default {
       };
       reader.readAsText(file);
     },
-    
-    parseLogData() {
-      // Initialiser le parser seulement pour extraire les informations des tests
-      // sans modifier le contenu original
+   async parseLogData() {
       this.logParser = new LogParser();
-      
-      // Parser les données pour extraire les informations nécessaires à la navigation
-      this.parsedEntries = this.logParser.parse(this.logData);
-      
-      // Extraire les informations des test cases pour la sidebar
+      this.parsedEntries = await this.logParser.parse(this.logData); 
+      console.log('Entrées parsées:', this.parsedEntries);
       this.extractTestCaseInfo();
     },
     
@@ -195,52 +187,52 @@ export default {
       return match ? match[1] : message;
     },
     
-    escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    escapeHtmlPreservingWhitespace(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     },
     
-    applyHighlights(message, highlightTokens) {
-      if (!highlightTokens || highlightTokens.length === 0) {
-        return message;
-      }
-      
-      // Trier les tokens par position pour éviter les conflits
-      const sortedTokens = highlightTokens.sort((a, b) => b.start - a.start);
-      
-      let result = message;
-      sortedTokens.forEach(token => {
-        const before = result.substring(0, token.start);
-        const highlighted = result.substring(token.start, token.end);
-        const after = result.substring(token.end);
-        
-        let cssClass = '';
-        switch (token.type) {
-          case 'assertion':
-            cssClass = 'highlight-assertion';
-            break;
-          case 'exception':
-            cssClass = 'highlight-exception';
-            break;
-          case 'error':
-            cssClass = 'highlight-error';
-            break;
-          case 'warning':
-            cssClass = 'highlight-warning';
-            break;
-          default:
-            cssClass = 'highlight-default';
-        }
-        
-        result = before + `<span class="${cssClass}">${highlighted}</span>` + after;
-      });
-      
-      return result;
-    },
+ applyHighlights(text, highlightTokens) {
+  console.log('--- applyHighlights() called ---');
+  console.log('Original text:', text);
+  console.log('Highlight tokens:', JSON.parse(JSON.stringify(highlightTokens)));
+
+  if (!highlightTokens?.length) {
+    console.log('No highlight tokens, returning original text');
+    return text;
+  }
+
+  const sortedTokens = [...highlightTokens].sort((a, b) => b.start - a.start);
+  console.log('Sorted tokens:', JSON.parse(JSON.stringify(sortedTokens)));
+
+  let result = text;
+  let iteration = 0;
+
+  sortedTokens.forEach(token => {
+    iteration++;
+    console.log(`\nIteration ${iteration}: Processing token`, token);
+    console.log('Current result before processing:', result);
+
+    const before = result.substring(0, token.start);
+    const match = result.substring(token.start, token.end);
+    const after = result.substring(token.end);
+    
+    console.log(`Splitting text: before=${before.length} chars | match=${match} | after=${after.length} chars`);
+    
+    result = `${before}<span class="highlight" style="background:${token.color}">${match}</span>${after}`;
+    
+    console.log('Result after processing:', result);
+  });
+
+  console.log('\nFinal result:', result);
+  return result;
+},
     
     scrollToTestCase(testCaseName) {
-      // Trouver l'entrée correspondante dans le contenu original
       const entryIndex = this.parsedEntries.findIndex(entry => 
         entry.isTestCase && this.extractTestCaseName(entry.message) === testCaseName
       );
@@ -254,7 +246,6 @@ export default {
             inline: 'nearest'
           });
           
-          // Ajouter un effet de surbrillance temporaire
           element.style.backgroundColor = 'rgba(52, 152, 219, 0.3)';
           element.style.transition = 'background-color 0.3s';
           
@@ -263,15 +254,12 @@ export default {
             element.style.backgroundColor = entry.getBackgroundColor();
           }, 2000);
         } else {
-          // Si l'élément avec ID n'est pas trouvé, chercher dans le texte brut
           const logContent = document.querySelector('.log-raw-content');
           if (logContent && logContent.textContent.includes(testCaseName)) {
-            // Faire défiler vers le début du contenu contenant le test case
             const textPosition = logContent.textContent.indexOf(testCaseName);
             if (textPosition !== -1) {
-              // Calculer approximativement la position de défilement
               const lines = logContent.textContent.substring(0, textPosition).split('\n').length;
-              const lineHeight = 14.4; // 12px * 1.2 line-height
+              const lineHeight = 14.4; 
               const scrollPosition = lines * lineHeight - logContent.clientHeight / 2;
               
               logContent.scrollTop = Math.max(0, scrollPosition);
@@ -285,7 +273,7 @@ export default {
       this.sidebarVisible = !this.sidebarVisible;
     }
   }
-};
+  };
 </script>
 
 <style scoped>
@@ -401,6 +389,11 @@ export default {
   transition: background-color 0.2s;
 }
 
+.log-raw-content span {
+  padding: 2px;
+  border-radius: 3px;
+}
+
 .sidebar li:hover {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
@@ -444,35 +437,6 @@ export default {
   flex-wrap: wrap;
 }
 
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.legend-color.testcase-passed {
-  background-color: #E6FFE6;
-  border-color: #00AA00;
-}
-
-.legend-color.testcase-failed {
-  background-color: #FFE6E6;
-  border-color: #FF0000;
-}
-
-.legend-color.assertion-highlight {
-  background-color: #FFE6CC;
-  border-color: #FF8800;
-}
-
 .log-content {
   flex-grow: 1;
   overflow: auto;
@@ -480,36 +444,30 @@ export default {
   position: relative;
 }
 
-/* Styles pour préserver le format exact du fichier log */
 .log-raw-content {
   font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
   font-size: 12px;
   line-height: 1.2;
-  margin: 0;
-  padding: 20px;
   white-space: pre;
   word-wrap: normal;
   overflow-wrap: normal;
-  background: #ffffff;
-  color: #000000;
-  border: none;
-  outline: none;
-  position: relative;
   tab-size: 4;
   -moz-tab-size: 4;
+  padding: 20px;
+  margin: 0;
+  background: #ffffff;
+  color: #000000;
 }
 
-/* Styles pour les entrées de log identifiées (pour navigation uniquement) */
+
 .log-entry {
   transition: background-color 0.3s ease;
+  /* Préserver le formatage dans les entrées spéciales */
+  white-space: pre;
+  margin: 0;
+  padding: 2px 0;
 }
 
-/* Pas d'autres modifications visuelles pour préserver l'aspect original */
-
-/* Suppression des styles de highlight pour préserver le texte original */
-/* Seuls les éléments de test case auront une bordure subtile pour la navigation */
-
-/* Styles spécifiques pour les types de test cases - très subtils */
 .testcase-passed {
   border-left: 3px solid rgba(46, 204, 113, 0.3) !important;
 }
@@ -518,7 +476,6 @@ export default {
   border-left: 3px solid rgba(231, 76, 60, 0.3) !important;
 }
 
-/* Animation pour les nouveaux éléments */
 .log-entry {
   animation: fadeIn 0.3s ease-in;
 }
@@ -532,7 +489,6 @@ export default {
   }
 }
 
-/* Responsive design */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
@@ -550,12 +506,11 @@ export default {
   }
   
   .log-raw-content {
-    font-size: 11px;
+    font-size: 12px;
     padding: 15px;
   }
 }
 
-/* Scrollbar styling pour WebKit browsers */
 .log-content::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -573,5 +528,30 @@ export default {
 
 .log-content::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+.highlight-assertion {
+  background-color: #FF8800;
+  padding: 2px;
+  border-radius: 3px;
+}
+
+.highlight-exception {
+  background-color: #FF5050;
+  padding: 2px;
+  border-radius: 3px;
+}
+
+.highlight-error {
+  background-color: #FF0000;
+  color: white;
+  padding: 2px;
+  border-radius: 3px;
+}
+
+.highlight-warning {
+  background-color: #FFFF00;
+  padding: 2px;
+  border-radius: 3px;
 }
 </style>

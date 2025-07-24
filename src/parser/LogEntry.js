@@ -4,6 +4,7 @@ export class LogEntry {
     level, 
     module, 
     message, 
+    rawLine,
     category = "standard", 
     highlightTokens = [],
     testCaseStatus = null,
@@ -13,51 +14,47 @@ export class LogEntry {
     this.level = level;
     this.module = module;
     this.message = message;
+    this.rawLine = rawLine || `${timestamp} ${level} ${module} ${message}`;
     this.category = category;
     this.highlightTokens = highlightTokens;
-    this.testCaseStatus = testCaseStatus; // "passed", "failed", or null
-    this.currentTestCase = currentTestCase; // Le test case actuel en cours
+    this.testCaseStatus = testCaseStatus; 
+    this.currentTestCase = currentTestCase; 
     this.isTestFailure = category === "assertion" || category === "exception";
     this.isTestCase = category === "testcase";
   }
-
-  // Méthode pour obtenir la couleur de fond selon la catégorie
   getBackgroundColor() {
     switch (this.category) {
       case "testcase":
-        return this.testCaseStatus === "failed" ? "#FFE6E6" : "#E6FFE6"; // Rouge clair ou vert clair
+        return this.testCaseStatus === "failed" ? "#FFE6E6" : "#E6FFE6"; 
       case "assertion":
       case "exception":
-        return "#FFE6CC"; // Orange clair
+        return "#FFE6CC"; 
+      case "error":
+        return "#FF0000";
+      case "warning":
+        return "#00ff7bff";
+      case "debug":
+        return "#a0ab04ff";
       default:
-        return "#FFFFFF"; // Blanc par défaut
+        return "#FFFFFF"; 
     }
   }
 
-  // Méthode pour obtenir la couleur de bordure
   getBorderColor() {
     switch (this.category) {
       case "testcase":
-        return this.testCaseStatus === "failed" ? "#FF0000" : "#00AA00"; // Rouge ou vert
+        return this.testCaseStatus === "failed" ? "#FF0000" : "#00AA00";
       case "assertion":
       case "exception":
-        return "#FF8800"; // Orange
+        return "#FF8800"; 
+      case "error":
+        return "#FF0000";
+      case "warning":
+        return "#00ff7bff";
+      case "debug":
+        return "#a0ab04ff";
       default:
-        return "#CCCCCC"; // Gris par défaut
-    }
-  }
-
-  // Méthode pour obtenir l'icône appropriée
-  getIcon() {
-    switch (this.category) {
-      case "testcase":
-        return this.testCaseStatus === "failed" ? "❌" : "✅";
-      case "assertion":
-        return "⚠️";
-      case "exception":
-        return "🔥";
-      default:
-        return "";
+        return "#CCCCCC"; 
     }
   }
 }
