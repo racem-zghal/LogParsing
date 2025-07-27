@@ -70,9 +70,84 @@
             <span class="legend-item"></span>
           </div>
         </div>
-        <div class="log-content">
-          <div v-html="formattedLog"></div>
-        </div>
+        <div class="log-raw-content">
+  <div
+    v-for="(entry, idx) in parsedEntries"
+    :key="idx"
+    :id="'testcase-' + idx"
+  >
+    <!-- Test case entry -->
+    <div
+      v-if="entry.isTestCase"
+      class="log-entry testcase-header"
+      :class="'testcase-' + entry.testCaseStatus"
+      @click="toggleTestCase(idx)"
+      :style="{
+        borderLeftColor: entry.getBorderColor(),
+        background: entry.getBackgroundColor(),
+      }"
+    >
+      <span class="toggle-icon">{{ collapsedTestCases[idx] ? '▶' : '▼' }}</span>
+      <strong>{{ entry.message }}</strong>
+    </div>
+
+    <!-- Test case body -->
+    <div
+      v-if="entry.isTestCase"
+      v-show="!collapsedTestCases[idx]"
+      class="testcase-body"
+    >
+      <div
+  v-for="(group, subIdx) in getTestCaseSubEntries(idx)"
+  :key="subIdx"
+>
+  <!-- Section Header -->
+  <div
+    v-if="group.section"
+    class="log-entry testcase-header"
+    @click="toggleSection(idx, group.section)"
+    style="padding-left: 20px; cursor: pointer; background-color: #f0f0f0;"
+  >
+    <span class="toggle-icon">
+      {{ collapsedSections[idx]?.[group.section] ? '▶' : '▼' }}
+    </span>
+    <strong>Live Log {{ group.section.charAt(0).toUpperCase() + group.section.slice(1) }}</strong>
+  </div>
+
+  <!-- SECTION BODY: Show only if not collapsed -->
+<template v-if="!collapsedSections[idx]?.[group.section]">
+  <div
+    v-for="(entry, lineIdx) in group.lines"
+    :key="lineIdx"
+    class="log-entry"
+    v-html="renderLine(entry)"
+    style="padding-left: 30px;"
+  ></div>
+</template>
+
+<!-- NO SECTION CASE: Render only if group.section is null -->
+<template v-if="!group.section">
+  <div
+    v-for="(entry, lineIdx) in group.lines"
+    :key="lineIdx"
+    class="log-entry"
+    v-html="renderLine(entry)"
+  ></div>
+</template>
+
+</div>
+
+    </div>
+
+    <!-- Standalone non-test lines -->
+    <div
+      v-if="!entry.isTestCase && !isInsideTestCase(idx)"
+      class="log-entry"
+      v-html="renderLine(entry)"
+    ></div>
+  </div>
+</div>
+
       </div>
     </div>
   </div>
@@ -90,8 +165,13 @@ function escapeHtml(text) {
 
 export default {
   data() {
+    
     return {
-      logData: '',
+      collapsedTestCases: {},
+      collapsedSections: {},
+
+      logData:null,
+      entries: [],
       parsedEntries: [],
       sidebarVisible: false,
       failedTestCases: [],
@@ -104,7 +184,10 @@ export default {
 formattedLog() {
   if (!this.logData) return '';
 
-  return this.parsedEntries.map((entry, idx) => {
+  let html = '';
+  let currentTestIndex = null;
+
+  this.parsedEntries.forEach((entry, idx) => {
     const lineRaw = escapeHtml(entry.rawLine || entry.message); 
     let line = lineRaw;
 
@@ -113,13 +196,108 @@ formattedLog() {
     }
 
     if (entry.isTestCase) {
-      return `<div class="log-entry testcase-${entry.testCaseStatus}" id="testcase-${idx}"style="border-left-color: ${entry.getBorderColor()};background: ${entry.getBackgroundColor()};margin: 0;">${line}</div>`;
+      currentTestIndex = idx;
+      const collapsed = this.collapsedTestCases[idx];
+      const toggleIcon = collapsed ? '▶' : '▼';
+      const testCaseHtml = `
+        <div class="log-entry testcase-${entry.testCaseStatus}" 
+             id="testcase-${idx}" 
+             style="border-left-color: ${entry.getBorderColor()}; background: ${entry.getBackgroundColor()}; margin: 0;">
+          <div class="testcase-header" @click="toggleTestCase(${idx})">
+            <span class="toggle-icon">${toggleIcon}</span>
+            <strong>${escapeHtml(entry.message)}</strong>
+          </div>
+          <div class="testcase-body" style="display: ${collapsed ? 'none' : 'block'};" id="testcase-body-${idx}">
+      `;
+      html += testCaseHtml;
+    } else if (currentTestIndex !== null) {
+      html += `<div class="log-entry">${line}</div>`;
+    } else {
+      html += `<div class="log-entry">${line}</div>`;
     }
-    return `<div>${line}</div>`;
-  }).join('');
 
-}},
+    // If this is the last line or next is a new test case, close the body
+    const next = this.parsedEntries[idx + 1];
+    if (entry.isTestCase || (currentTestIndex !== null && (!next || next.isTestCase))) {
+      html += `</div>`; // close .testcase-body
+    }
+  });
+
+  return html;
+},
+},
 methods: {
+  getSectionName(entry) {
+  const msg = (entry.rawLine || entry.message || '').toLowerCase();
+  if (msg.includes('live log setup')) return 'setup';
+  if (msg.includes('live log call')) return 'call';
+  if (msg.includes('live log teardown')) return 'teardown';
+  return null;
+},
+
+
+  toggleTestCase(index) {
+this.collapsedTestCases = {
+  ...this.collapsedTestCases,
+  [index]: !this.collapsedTestCases[index]
+};
+},
+
+getTestCaseSubEntries(startIndex) {
+  const result = [];
+  let currentSection = null;
+  let currentSectionLines = [];
+
+  for (let i = startIndex + 1; i < this.parsedEntries.length; i++) {
+    const entry = this.parsedEntries[i];
+    if (entry.isTestCase) break;
+
+    const section = this.getSectionName(entry);
+    if (section) {
+      if (currentSection && currentSectionLines.length > 0) {
+        result.push({ section: currentSection, lines: currentSectionLines });
+      }
+      currentSection = section;
+      currentSectionLines = [];
+    }
+    if (currentSection) {
+      currentSectionLines.push(entry);
+    } else {
+      result.push({ section: null, lines: [entry] }); // not inside a known section
+    }
+  }
+
+  if (currentSection && currentSectionLines.length > 0) {
+    result.push({ section: currentSection, lines: currentSectionLines });
+  }
+
+  return result;
+},
+toggleSection(tcIndex, section) {
+  if (!this.collapsedSections[tcIndex]) {
+    this.collapsedSections[tcIndex] = {};
+  }
+  this.collapsedSections[tcIndex][section] = !this.collapsedSections[tcIndex][section];
+},
+
+
+isInsideTestCase(index) {
+  for (let i = index - 1; i >= 0; i--) {
+    if (this.parsedEntries[i].isTestCase) return true;
+  }
+  return false;
+},
+
+renderLine(entry) {
+  const text = escapeHtml(entry.rawLine || entry.message || '');
+  if (entry.highlightTokens?.length) {
+    return this.applyHighlights(text, entry.highlightTokens);
+  }
+  return text;
+},
+
+ 
+
     handleFileUpload(event) {
       const file = event.target.files[0];
       this.readLogFile(file);
@@ -286,6 +464,27 @@ getHighlightDescription(type, token = null) {
 </script>
 
 <style scoped>
+.testcase-header {
+  cursor: pointer;
+  padding: 6px 10px;
+  background-color: #ecf0f1;
+  font-family: monospace;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-left: 3px solid;
+}
+
+.testcase-body {
+  padding-left: 15px;
+}
+
+.toggle-icon {
+  font-weight: bold;
+  width: 16px;
+}
+
+
 .app-container {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   display: flex;
@@ -429,7 +628,7 @@ getHighlightDescription(type, token = null) {
   background: white;
   border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .log-header {
