@@ -571,8 +571,11 @@ export class LogParser {
   processTestCase(line, match) {
   const testCasePath = match[1];
   this.currentTestCase = testCasePath;
-  const hasFailures = this.testCaseResults.get(testCasePath) || false;
-  const highlightType = hasFailures ? "testcase-failed" : "testcase";
+
+  const result = this.testCaseResults.get(testCasePath);
+  if (result === "skipped") return null; // ❌ Skip rendering skipped test cases
+
+  const highlightType = result === "failed" ? "testcase-failed" : "testcase";
   const highlightTokens = this.detectHighlightsByType(line, highlightType);
 
   return new LogEntry({
@@ -582,11 +585,12 @@ export class LogParser {
     message: line,
     rawLine: line,
     category: "testcase",
-    testCaseStatus: hasFailures ? "failed" : "passed",
+    testCaseStatus: result,
     highlightTokens: highlightTokens,
-    customColor: hasFailures ? "#FF0000" : "#00AA00"
+    customColor: result === "failed" ? "#FF0000" : "#00AA00"
   });
 }
+
 
   processDetailedLine(line, match) {
   const messageTokensRaw = this.detectHighlights(line);
@@ -713,12 +717,21 @@ export class LogParser {
     }
   }
 
-  hasTestFailed(lines) {
-    return lines.some(line => {
-      const tokens = this.detectHighlights(line);
-      return tokens.some(t => t.type === "assertion" || t.type === "exception") ;
-    });
-  }
+ hasTestFailed(lines) {
+  const isSkipped = lines.some(line =>
+    line.includes("setup result: skipped") || line.trim().startsWith("SKIPPED")
+  );
+
+  if (isSkipped) return "skipped";
+
+  const hasFailure = lines.some(line => {
+    const tokens = this.detectHighlights(line);
+    return tokens.some(t => t.type === "assertion" || t.type === "exception");
+  });
+
+  return hasFailure ? "failed" : "passed";
+}
+
 
  detectHighlights(text) {
   console.log('----- Nouvelle détection -----');
