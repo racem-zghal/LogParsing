@@ -71,9 +71,7 @@
           </div>
         </div>
         <div class="log-content">
-          <pre class="log-raw-content" v-html="formattedLog"></pre>
-
-       
+          <div v-html="formattedLog"></div>
         </div>
       </div>
     </div>
@@ -103,34 +101,25 @@ export default {
     };
   },
  computed: {
-  formattedLog() {
+formattedLog() {
   if (!this.logData) return '';
 
   return this.parsedEntries.map((entry, idx) => {
     const lineRaw = escapeHtml(entry.rawLine || entry.message); 
-    let line = lineRaw
+    let line = lineRaw;
 
     if (entry.highlightTokens?.length) {
       line = this.applyHighlights(line, entry.highlightTokens);
     }
 
     if (entry.isTestCase) {
-      return `<pre class="log-entry testcase-${entry.testCaseStatus}" 
-                   id="testcase-${idx}"
-                   style="border-left-color: ${entry.getBorderColor()};
-                          background: ${entry.getBackgroundColor()};
-                          margin: 0;">
-                ${line}
-              </pre>`;
+      return `<div class="log-entry testcase-${entry.testCaseStatus}" id="testcase-${idx}"style="border-left-color: ${entry.getBorderColor()};background: ${entry.getBackgroundColor()};margin: 0;">${line}</div>`;
     }
-
-    return `<pre class="log-entry" style="margin: 0;">${line}</pre>`;
+    return `<div>${line}</div>`;
   }).join('');
-}
 
-}
-,
-  methods: {
+}},
+methods: {
     handleFileUpload(event) {
       const file = event.target.files[0];
       this.readLogFile(file);
@@ -196,7 +185,7 @@ export default {
         .replace(/'/g, '&#39;');
     },
     
- applyHighlights(text, highlightTokens) {
+applyHighlights(text, highlightTokens) {
   console.log('--- applyHighlights() called ---');
   console.log('Original text:', text);
   console.log('Highlight tokens:', JSON.parse(JSON.stringify(highlightTokens)));
@@ -222,14 +211,34 @@ export default {
     const after = result.substring(token.end);
     
     console.log(`Splitting text: before=${before.length} chars | match=${match} | after=${after.length} chars`);
-    
-    result = `${before}<span class="highlight" style="background:${token.color}">${match}</span>${after}`;
+    const description = this.getHighlightDescription(token.type, token);
+    console.log("//////////////////////"+description);
+    if (description === "") {
+      result = `${before}<span class="highlight-container"><span class="highlight" style="background:${token.color}">${match}</span></span>${after}`; 
+    } else {
+      result = `${before}<span class="highlight-container"><span class="highlight" style="background:${token.color}">${match}</span><span class="highlight-tooltip">${description}</span></span>${after}`;   
+    }
     
     console.log('Result after processing:', result);
   });
-
+  
   console.log('\nFinal result:', result);
   return result;
+},
+
+
+getHighlightDescription(type, token = null) {
+  if (token && typeof token.customDescription === 'string' && token.customDescription.trim() !== '') {
+    return token.customDescription;
+  }
+
+  if (!this.logParser || !Array.isArray(this.logParser.highlightDefinitions)) {
+    return type; 
+  }
+
+  const rule = this.logParser.highlightDefinitions.find(r => r.type === type);
+
+  return rule?.description || '';
 },
     
     scrollToTestCase(testCaseName) {
@@ -399,6 +408,9 @@ export default {
   border-radius: 4px;
 }
 
+
+
+
 .test-icon {
   margin-right: 8px;
   font-size: 14px;
@@ -441,7 +453,7 @@ export default {
   flex-grow: 1;
   overflow: auto;
   padding: 0;
-  position: relative;
+  
 }
 
 .log-raw-content {
@@ -461,10 +473,13 @@ export default {
 
 
 .log-entry {
-  transition: background-color 0.3s ease;
-  /* Préserver le formatage dans les entrées spéciales */
+  position: relative;
+  overflow: visible;
   white-space: pre;
-  margin: 0;
+  font-family: monospace;
+  transition: background-color 0.3s ease;
+  white-space: pre;
+  margin: 0 !important;
   padding: 2px 0;
 }
 
@@ -529,6 +544,12 @@ export default {
 .log-content::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+.highlight {
+  border-radius: 2px;
+  padding: 0 2px;
+  cursor: help;
+  position: relative;
+}
 
 .highlight-assertion {
   background-color: #FF8800;
@@ -554,4 +575,51 @@ export default {
   padding: 2px;
   border-radius: 3px;
 }
+
+.highlight-container {
+  display: inline-block;
+  position: relative;
+  line-height: 1.2; 
+}
+
+::v-deep(.highlight-container) {
+  position: relative;
+  display: inline-block;
+  line-height: 1.2;
+}
+
+::v-deep(.highlight-tooltip) {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #2a4365;
+  color: #ebf8ff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000; 
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none; 
+  min-width: max-content;
+}
+
+::v-deep(.highlight-tooltip)::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #2a4365 transparent transparent transparent;
+}
+
+::v-deep(.highlight-container:hover) .highlight-tooltip {
+  opacity: 1;
+}
+
 </style>
