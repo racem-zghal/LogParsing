@@ -6,40 +6,39 @@ export class LogParser {
     this.parsingRules = [
       new ParsingRule(
         "Test Case Start",
-        /^(.+\.py::\w+::\w+)\s/
+        /^(.+\.py::\w+::\w+)\s(?!.*live log finish)/
       ),
       new ParsingRule(
         "Detailed Log Line",
         /^\[(.*?)\]\s+\[(.*?)\]\s+\[(.*?)\]\s+(.*)/
-      )
-    ];
+      ),
+      new ParsingRule(
+        "Failures",/^=+\s*FAILURES\s*=+$/),
+      new ParsingRule(
+        "Errors",/^=+\s*ERRORS\s*=+$/), 
+      new ParsingRule(
+        "warnings summary" ,/^\s*=+\s*warnings\s+summary\s*=+\s*$/),   
+        ];
       this.highlightDefinitions = []; 
     this.currentTestCase = null;
     this.testCaseResults = new Map();
+    this.skipCurrentTestCaseLogs = false;
     this.ready = this.loadHighlightRules(); 
   }
 
  async loadHighlightRules() {
-    try {
-      const response = await fetch('highlight-rules.json');
-      if (!response.ok) throw new Error('HTTP error');
-      const rules = await response.json();
-      console.log('Règles chargées:', rules);
-      this.highlightDefinitions = rules;
-    } catch (err) {
-      console.warn("Using default rules:", err);
       this.highlightDefinitions = [
         {
         name: "Error",
         pattern: "\\[ERR\\]",
         type: "error",
-        color: "#FF0000",
+        color: "#f06d6dff",
         description: ""
 
       },
       {
         name: "AssertionFailed",
-        pattern: "\\[Assert FAILED\\]",
+        pattern: "\\[Assert FAILED\\].*",
         type: "assertion",
         color: "#FF8800",
         description: ""
@@ -47,7 +46,7 @@ export class LogParser {
         },
         {
           name: "ExceptionFailed", 
-          pattern: "\\[Expect FAILED\\]",
+          pattern: "\\[Expect FAILED\\].*",
           type: "exception",
           color: "#FF8800",
           description: ""
@@ -69,6 +68,21 @@ export class LogParser {
   color: "#3294cdff" ,
   description: ""
 
+},
+{
+  name: "ECUResetRES",
+  pattern: "^.*Payload:\\s+00\\s+9[01](\\s+[0-9A-Fa-f]{2}){2}\\s+51\\s+01\\b.*$",
+  type: "ECUResetRES",
+  color: "#3294cdff" ,
+  description: ""
+
+},
+{
+  name: "SinceBootReset",
+  pattern: "^.*Since Boot\\(Power On Reset\\).*$",
+  type: "SinceBootReset",
+  color: "#3294cdff",
+  description: ""
 },
 {
   name: "statustokenINITIALLY_DISABLED",
@@ -525,37 +539,34 @@ export class LogParser {
         }
       }
     ]
-  }
-  
-  
-
-
-      
-
-
-
-        
-      ];
-    }
-  }
+  } 
+]; }
 
   async parse(rawText) {
-    await this.ready;
-    console.log('Texte brut reçu :', rawText.substring(0, 100) + '...'); 
-    const lines = rawText.split(/\r?\n/);
-    console.log(`${lines.length} lignes à traiter`); 
-    const entries = [];
-    this.analyzeTestCases(lines);
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      let entry = this.processLine(line);
-      if (entry) entries.push(entry);
-    }
-    return entries;
+  await this.ready;
+  
+  if (typeof rawText !== 'string') {
+    console.log(typeof rawText);
+    console.error('ERREUR: Donnée reçue non string:', rawText);
+    throw new Error('rawText n\'est pas une chaîne de caractères');
   }
 
+  console.log('Texte brut reçu :', rawText.substring(0, 100) + '...'); 
+  const lines = rawText.split(/\r?\n/);
+  console.log(`${lines.length} lignes à traiter`); 
+
+  const entries = [];
+  this.analyzeTestCases(lines);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let entry = this.processLine(line);
+    if (entry) entries.push(entry);
+  }
+
+  return entries;
+}
+
   processLine(line) {
-    console.log('Traitement ligne :', line); 
     for (const rule of this.parsingRules) {
       const match = line.match(rule.regex);
       if (!match) continue;
@@ -563,6 +574,12 @@ export class LogParser {
         return this.processTestCase(line, match);
       } else if (rule.name === "Detailed Log Line") {
         return this.processDetailedLine(line, match);
+      } else if (rule.name === "Failures") {
+        return this.processFailuresSection(line);
+      } else if (rule.name === "Errors") {
+        return this.processErrorsSection(line);
+      } else if (rule.name === "warnings summary") {
+        return this.processWarningsSection(line);
       }
     }
     return this.processUnmatchedLine(line);
@@ -571,8 +588,15 @@ export class LogParser {
   processTestCase(line, match) {
   const testCasePath = match[1];
   this.currentTestCase = testCasePath;
-  const hasFailures = this.testCaseResults.get(testCasePath) || false;
-  const highlightType = hasFailures ? "testcase-failed" : "testcase";
+
+  const result = this.testCaseResults.get(testCasePath);
+  if (result === "skipped") {
+  this.skipCurrentTestCaseLogs = true;
+  return null;
+}
+this.skipCurrentTestCaseLogs = false;
+
+  const highlightType = result === "failed" ? "testcase-failed" : "testcase";
   const highlightTokens = this.detectHighlightsByType(line, highlightType);
 
   return new LogEntry({
@@ -582,13 +606,16 @@ export class LogParser {
     message: line,
     rawLine: line,
     category: "testcase",
-    testCaseStatus: hasFailures ? "failed" : "passed",
+    testCaseStatus: result,
     highlightTokens: highlightTokens,
-    customColor: hasFailures ? "#FF0000" : "#00AA00"
+    customColor: result === "failed" ? "#FF0000" : "#00AA00"
   });
 }
 
+
   processDetailedLine(line, match) {
+  if (this.skipCurrentTestCaseLogs) return null;
+
   const messageTokensRaw = this.detectHighlights(line);
   const messageTokens = messageTokensRaw.map(token => ({
     start: token.start,
@@ -612,6 +639,7 @@ export class LogParser {
 
 
   processUnmatchedLine(line) {
+    if (this.skipCurrentTestCaseLogs) return null;
     const highlightTokens = this.detectHighlights(line);
     const category = this.determineCategory(highlightTokens);
     return new LogEntry({
@@ -624,6 +652,47 @@ export class LogParser {
       highlightTokens: highlightTokens
     });
   }
+  processFailuresSection(line) {
+    const highlightTokens = this.detectHighlights(line);
+    const category = "finalFAILURES";
+    return new LogEntry({
+      timestamp: "",
+      level: "INFO",
+      module: "",
+      message: line,
+      category: category,
+      currentTestCase: null,
+      highlightTokens: highlightTokens
+    });
+  }
+  processErrorsSection(line) {
+    const highlightTokens = this.detectHighlights(line);
+    const category = "finalERRORS";
+    return new LogEntry({
+      timestamp: "",
+      level: "INFO",
+      module: "",
+      message: line,
+      category: category,
+      currentTestCase: null,
+      highlightTokens: highlightTokens
+    });
+  }
+
+  processWarningsSection(line) {
+    const highlightTokens = this.detectHighlights(line);
+    const category = "finalWARNINGS";
+    return new LogEntry({
+      timestamp: "",
+      level: "INFO",
+      module: "",
+      message: line,
+      category: category,
+      currentTestCase: null,
+      highlightTokens: highlightTokens
+    });
+  }
+
 
   determineCategory(highlightTokens) {
   if (highlightTokens.some(t => t.type === "error")) return "error";
@@ -631,6 +700,8 @@ export class LogParser {
   if (highlightTokens.some(t => t.type === "assertion")) return "assertion";
   if (highlightTokens.some(t => t.type === "exception")) return "exception";
   if (highlightTokens.some(t => t.type === "ECUReset")) return "ECUReset";
+  if (highlightTokens.some(t => t.type === "ECUResetRES")) return "ECUResetRES";
+  if (highlightTokens.some(t => t.type === "SinceBootReset")) return "SinceBootReset";
   if (highlightTokens.some(t => t.type === "statustokenINITIALLY_DISABLED")) return "statustokenINITIALLY_DISABLED";
   if (highlightTokens.some(t => t.type === "statustokenENABLED")) return "statustokenENABLED";
   if (highlightTokens.some(t => t.type === "statustokenDISABLED")) return "statustokenDISABLED";
@@ -691,55 +762,73 @@ export class LogParser {
   return "standard";
 }
 
-  analyzeTestCases(lines) {
-    let currentTestCase = null;
-    let testCaseLines = [];
-    
-    for (const line of lines) {
-      const testCaseMatch = line.match(/^(.+\.py::\w+::\w+)\s/);
-      if (testCaseMatch) {
-        if (currentTestCase !== null) {
-          this.testCaseResults.set(currentTestCase, this.hasTestFailed(testCaseLines));
-        }
-        currentTestCase = testCaseMatch[1];
-        testCaseLines = [line];
-      } else if (currentTestCase !== null) {
-        testCaseLines.push(line);
+ analyzeTestCases(lines) {
+  let currentTestCase = null;
+  let testCaseLines = [];
+
+  for (const line of lines) {
+    const testCaseMatch = line.match(/^([\w/\\.-]+\.py::[\w<>]+::[\w<>]+)\b/);
+
+    if (testCaseMatch) {
+      if (currentTestCase !== null) {
+        
+        this.testCaseResults.set(currentTestCase, this.hasTestFailed(testCaseLines));
+      }
+
+      currentTestCase = testCaseMatch[1];
+      testCaseLines = [line];
+    } else if (currentTestCase !== null) {
+      
+      testCaseLines.push(line);
+    } else {
+      
+      if (line.includes("+++++++++ Timeout +++++++++")) {
+        console.warn("⚠️ Timeout détecté hors test case. Ignoré :", line);
       }
     }
-    
-    if (currentTestCase !== null) {
-      this.testCaseResults.set(currentTestCase, this.hasTestFailed(testCaseLines));
-    }
   }
 
-  hasTestFailed(lines) {
-    return lines.some(line => {
-      const tokens = this.detectHighlights(line);
-      return tokens.some(t => t.type === "assertion" || t.type === "exception") ;
-    });
+  if (currentTestCase !== null) {
+    this.testCaseResults.set(currentTestCase, this.hasTestFailed(testCaseLines));
   }
+}
+
+ hasTestFailed(lines) {
+  const isSkipped = lines.some(line =>
+    line.includes("setup result: skipped") || line.trim().startsWith("SKIPPED")
+  );
+
+  if (isSkipped) return "skipped";
+
+  const hasFailure = lines.some(line => {
+    const tokens = this.detectHighlights(line);
+    const tokenFailure = tokens.some(t =>
+      t.type === "assertion" || t.type === "exception"
+    );
+
+    const textFailure =
+      line.includes("+++++++++ Timeout +++++++++")||
+      line.includes("setup result: failed") ||
+      line.includes("call result: failed") ||
+      line.includes("teardown result: failed");
+
+    return tokenFailure || textFailure;
+  });
+
+  return hasFailure ? "failed" : "passed";
+}
+
+
 
  detectHighlights(text) {
-  console.log('----- Nouvelle détection -----');
-  console.log('Texte analysé:', text);
-  console.log('Règles disponibles:', this.highlightDefinitions);
-  
   const tokens = [];
   for (const rule of this.highlightDefinitions) {
     try {
       const regex = new RegExp(rule.pattern, "gi");
-      console.log(`Test pattern "${rule.pattern}" sur "${text}"`);
       
       let match;
       while ((match = regex.exec(text)) !== null) {
-        console.log('MATCH TROUVÉ:', {
-          rule: rule.name,
-          matched: match[0],
-          index: match.index
-        });
         let description = rule.description;
-        
         if (rule.multiDescriptions && rule.subPatterns) {
           const descriptions = [];
           rule.subPatterns.forEach(subPattern => {
@@ -747,11 +836,10 @@ export class LogParser {
             if (capturedValue && subPattern.descriptions[capturedValue.toUpperCase()]) {
               descriptions.push(`${subPattern.name}: ${subPattern.descriptions[capturedValue.toUpperCase()]}`);
             }
-            console.log("***********"+descriptions);
+            
           });
           if (descriptions.length > 0) {
             description = descriptions.join(' | ');
-            console.log('Descriptions multi trouvées:', description);
 
           }
         }
@@ -763,14 +851,12 @@ export class LogParser {
           color: rule.color,
           customDescription: description 
         });
-        console.log("+++++++++++++++++++"+tokens.type);
       }
     } catch (e) {
       console.error("Erreur regex:", rule.pattern, e);
     }
   }
   
-  console.log('Tokens générés:', tokens);
   return tokens;
 }
   detectHighlightsByType(text, targetType) {
@@ -801,8 +887,6 @@ export class LogParser {
       mergedTokens.push(token);
     }
   });
-
-  console.log('Tokens fusionnés:', mergedTokens);
   return mergedTokens;
 }
 

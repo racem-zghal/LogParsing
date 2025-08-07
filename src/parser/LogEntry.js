@@ -21,20 +21,19 @@ export class LogEntry {
     this.currentTestCase = currentTestCase; 
     this.isTestFailure = category === "assertion" || category === "exception";
     this.isTestCase = category === "testcase";
+    this.isSecFail = category === "finalFAILURES";
+    this.isSecERR = category === "finalERRORS";
+    this.isSecWarr = category === "finalWARNINGS";
+    this.isFinalSection= category === "finalFAILURES" || category === "finalERRORS" || category === "finalWARNINGS";
+    this.isFinalSectionContent = false;
+    this.parentFinalSection = null;
+
+
   }
   getBackgroundColor() {
     switch (this.category) {
       case "testcase":
         return this.testCaseStatus === "failed" ? "#FFE6E6" : "#E6FFE6"; 
-      case "assertion":
-      case "exception":
-        return "#FFE6CC"; 
-      case "error":
-        return "#FF0000";
-      case "warning":
-        return "#00ff7bff";
-      case "debug":
-        return "#a0ab04ff";
       default:
         return "#FFFFFF"; 
     }
@@ -44,15 +43,6 @@ export class LogEntry {
     switch (this.category) {
       case "testcase":
         return this.testCaseStatus === "failed" ? "#FF0000" : "#00AA00";
-      case "assertion":
-      case "exception":
-        return "#FF8800"; 
-      case "error":
-        return "#FF0000";
-      case "warning":
-        return "#00ff7bff";
-      case "debug":
-        return "#a0ab04ff";
       default:
         return "#CCCCCC"; 
     }
