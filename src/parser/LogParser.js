@@ -18,6 +18,8 @@ export class LogParser {
         "Errors",/^=+\s*ERRORS\s*=+$/), 
       new ParsingRule(
         "warnings summary" ,/^\s*=+\s*warnings\s+summary\s*=+\s*$/),   
+         new ParsingRule(
+        "short test summary info" ,/^\s*=+\s*short\s+test\s+summary\s+info\s*=+\s*$/), 
         ];
       this.highlightDefinitions = []; 
     this.currentTestCase = null;
@@ -539,22 +541,277 @@ export class LogParser {
         }
       }
     ]
-  } 
+  } ,
+  {
+    name: "Generating Tal for",
+    pattern: "Generating Tal for.*$",
+    type: "Generating Tal for",
+    color: "#c2e0c6"
+  },
+  {
+    name: "Check pdx template version",
+    pattern: "Check pdx template version.*$",
+    type: "Check pdx template version",
+    color: "#d1ecf1"
+  },
+  {
+    name: "Importing PDX Container:",
+    pattern: "Importing PDX Container:.*$",
+    type: "Importing PDX Container:",
+    color: "#fff3cd"
+  },
+  {
+    name: "Extracted VIN from FA file:",
+    pattern: "Extracted VIN from FA file:.*$",
+    type: "Extracted VIN from FA file:",
+    color: "#f8d7da"
+  },
+  {
+    name: "Check for cached signed NCDs",
+    pattern: "Check for cached signed NCDs.*$",
+    type: "Check for cached signed NCDs",
+    color: "#e2e3e5"
+  },
+  {
+    name: "Processed SVK:",
+    pattern: "Processed SVK:.*$",
+    type: "Processed SVK:",
+    color: "#d4edda"
+  },
+  {
+    name: "Read SVT before TAL execution started",
+    pattern: "Read SVT before TAL execution started.*$",
+    type: "Read SVT before TAL execution started",
+    color: "#cce5ff"
+  },
+  {
+    name: "Checking Mirror-Protocol started",
+    pattern: "Checking Mirror-Protocol started.*$",
+    type: "Checking Mirror-Protocol started",
+    color: "#ffecd1"
+  },
+  {
+    name: "Status readSecureEcuMode:",
+    pattern: "Status readSecureEcuMode:.*$",
+    type: "Status readSecureEcuMode:",
+    color: "#e0c9a6"
+  },
+  {
+    name: "Checking Programming Protection \"PLUS\" started",
+    pattern: "Checking Programming Protection \"PLUS\" started.*$",
+    type: "Checking Programming Protection \"PLUS\" started",
+    color: "#fde2e2"
+  },
+  {
+    name: "Checking Programming Protection \"BASIC\" started",
+    pattern: "Checking Programming Protection \"BASIC\" started.*$",
+    type: "Checking Programming Protection \"BASIC\" started",
+    color: "#e2e8f0"
+  },
+  {
+    name: "TAL execution started.",
+    pattern: "TAL execution started.*$",
+    type: "TAL execution started.",
+    color: "#c7d2fe"
+  },
+  {
+    name: "prepareECUforMirrorFlash started",
+    pattern: "prepareECUforMirrorFlash started.*$",
+    type: "prepareECUforMirrorFlash started",
+    color: "#bbf7d0"
+  },
+  {
+    name: "finalizeECUMirrorFlash finished",
+    pattern: "finalizeECUMirrorFlash finished.*$",
+    type: "finalizeECUMirrorFlash finished",
+    color: "#bbf7d0"
+  },
+  {
+name: "E-Sys ecuMirrorDeploy TA started",
+  pattern: "\\[E-Sys\\] <\\[.*\\] Transaction type: ecuMirrorDeploy;  Message: TA started.*$",
+  type: "E-Sys ecuMirrorDeploy TA started",
+  color: "#a3d9ff"
+},
+{
+  name: "cleanup_esys_process",
+  pattern: "\\[cleanup_esys_process\\]",
+  type: "cleanup_esys_process",
+  color: "#ffe4b5"
+},
+{
+  name: "DEBUG_PORT_AVAILABILITY",
+  pattern: "\\[DEBUG PORT AVAILABILITY\\]",
+  type: "DEBUG_PORT_AVAILABILITY",
+  color: "#ffe4b5"
+},
+{
+  name: "itf.pybus_sim.basic_rbs",
+  pattern: "\\[itf.pybus_sim.basic_rbs\\]",
+  type: "itf.pybus_sim.basic_rbs",
+  color: "#ffe4b5"
+},
+{
+  name: "setup_dut_certif",
+  pattern: "\\[setup_dut_certif\\]",
+  type: "setup_dut_certif",
+  color: "#ffe4b5"
+},
+  {
+name: "E-Sys ecuActivate TA started",
+  pattern: "\\[E-Sys\\] <\\[.*\\] Transaction type: ecuActivate;  Message: TA started.*$",
+  type: "E-Sys ecuActivate TA started",
+  color: "#a3d9ff"
+},
+  {
+name: "E-Sys ecuPoll TA started",
+  pattern: "\\[E-Sys\\] <\\[.*\\] Transaction type: ecuPoll;  Message: TA started.*$",
+  type: "E-Sys ecuPoll TA started",
+  color: "#a3d9ff"
+},
+{
+    name: "finalizeVehicleFlash finished",
+    pattern: "finalizeVehicleFlash finished.*$",
+    type: "finalizeVehicleFlash finished",
+    color: "#bbf7d0"
+  },
+    {
+name: "E-Sys cdDeploy TA started",
+  pattern: "\\[E-Sys\\] <\\[.*\\] Transaction type: cdDeploy;  Message: TA started.*$",
+  type: "E-Sys cdDeploy TA started",
+  color: "#a3d9ff"
+},
+  {
+    name: "prepareVehicleForCoding started",
+    pattern: "prepareVehicleForCoding started.*$",
+    type: "prepareVehicleForCoding started",
+    color: "#bbf7d0"
+  },
+  {
+    name: "finalizeVehicleCoding started",
+    pattern: "finalizeVehicleCoding started.*$",
+    type: "finalizeVehicleCoding started",
+    color: "#bbf7d0"
+  },
+   {
+    name: "MSM_checks summary report ",
+    pattern: "---------- MSM_checks summary report ----------",
+    type: "MSM_checks summary report",
+    color: "#bbf7d0"
+  },
+  {
+    name: "Your program receive_notification with data",
+    pattern: "Your program receive_notification with data.*$",
+    type: "Your program receive_notification with data",
+    color: "#bbf7d0"
+  },
+   {
+    name: "ipcClientsResponse",
+    pattern: "ipcClientsResponse {",
+    type: "ipcClientsResponse",
+    color: "#bbf7d0"
+  },
+  {
+    name: "TAS-SIM",
+    pattern: "TAS-SIM.{3}.",
+    type: "TAS-SIM",
+    color: "#bbf7d0"
+  },
+  {
+    name: "Send command: requestID:",
+    pattern: "Send command: requestID:.*$",
+    type: "Send command: requestID:",
+    color: "#bbf7d0"
+  },
+  {
+  name: "executionStatus: OK",
+  pattern: "executionStatus:\\ OK",
+  type: "executionStatusOK",
+  color: "#00ffcc",
+  description: ""
+},
+{
+  name: "executionStatusOther",
+  pattern: "executionStatus:\\ (?!OK)\\w+",
+  type: "executionStatusOther",
+  color: "#e64545f7",
+  description: ""
+},
+{
+  name: "libStatus:Done",
+  pattern: "libStatus\\: Done",
+  type: "libStatusDone",
+  color: "#00ffcc",
+  description: ""
+},
+{
+  name: "libStatusOther",
+  pattern: "libStatus\\: (?!Done)\\w+",
+  type: "libStatusOther",
+  color: "#e64545f7",
+  description: ""
+},
+{
+  name: "execution_result: SUCCESS",
+  pattern: "execution_result\\: SUCCESS",
+  type: "execution_result_SUCCESS",
+  color: "#00ffcc",
+  description: ""
+},
+{
+  name: "execution_resultOther",
+  pattern: "execution_result\\: (?!SUCCESS)\\w+",
+  type: "execution_resultOther",
+  color: "#e64545f7",
+  description: ""
+},
+ {
+    name: "prepareECUforMirrorFlash started",
+    pattern: "prepareECUforMirrorFlash started.",
+    type: "prepareECUforMirrorFlash started",
+    color: "#bbf7d0"
+  },
+   {
+    name: "There was an error during TAL execution, please check the log files.",
+    pattern: "There was an error during TAL execution, please check the log files.",
+    type: "There was an error during TAL execution, please check the log files.",
+    color: "#bbf7d0"
+  },
+{
+    name: "finalizeECUMirrorFlash finished",
+    pattern: "finalizeECUMirrorFlash finished.",
+    type: "finalizeECUMirrorFlash finished",
+    color: "#bbf7d0"
+  },
+  {
+    name: "TAL-Execution finished with status:",
+    pattern: "TAL-Execution finished with status:.*$",
+    type: "TAL-Execution finished with status:",
+    color: "#bbf7d0"
+  },
+  {
+    name: "finalizeECUMirrorFlash finished with error",
+    pattern: "finalizeECUMirrorFlash finished with error.",
+    type: "finalizeECUMirrorFlash finished with error",
+    color: "#bbf7d0"
+  },
+{
+  name: "MirrorProtocolPrepFailed",
+  pattern: "^.*Mirror Protocol preparation failed for given ECU:\\s*(ECUId:[^\\s]+)\\s*with return code:\\s*(\\d{1,3}).*$",
+  type: "MirrorProtocolPrepFailed",
+  color: "#ffcccb",
+  description: ((matches) => (parseInt(matches[2], 10).toString(16).toUpperCase().padStart(2, '0')))
+},
+
 ]; }
 
   async parse(rawText) {
   await this.ready;
   
   if (typeof rawText !== 'string') {
-    console.log(typeof rawText);
     console.error('ERREUR: Donnée reçue non string:', rawText);
     throw new Error('rawText n\'est pas une chaîne de caractères');
   }
-
-  console.log('Texte brut reçu :', rawText.substring(0, 100) + '...'); 
   const lines = rawText.split(/\r?\n/);
-  console.log(`${lines.length} lignes à traiter`); 
-
   const entries = [];
   this.analyzeTestCases(lines);
   for (const line of lines) {
@@ -579,6 +836,8 @@ export class LogParser {
       } else if (rule.name === "Errors") {
         return this.processErrorsSection(line);
       } else if (rule.name === "warnings summary") {
+        return this.processWarningsSection(line);
+      }else if (rule.name === "short test summary info") {
         return this.processWarningsSection(line);
       }
     }
@@ -644,7 +903,7 @@ this.skipCurrentTestCaseLogs = false;
     const category = this.determineCategory(highlightTokens);
     return new LogEntry({
       timestamp: "",
-      level: "INFO",
+      level: "",
       module: "",
       message: line,
       category: category,
@@ -758,7 +1017,48 @@ this.skipCurrentTestCaseLogs = false;
   if (highlightTokens.some(t => t.type === "RSU_NIGATIVE_RESPONSE_CODES_90")) return "RSU_NIGATIVE_RESPONSE_CODES_90";
   if (highlightTokens.some(t => t.type === "RSU_NIGATIVE_RESPONSE_CODES_FC")) return "RSU_NIGATIVE_RESPONSE_CODES_FC";
   if (highlightTokens.some(t => t.type === "RSU_RESPONSE_WITH_MULTI_DESC")) return "RSU_RESPONSE_WITH_MULTI_DESC";
-  
+  if (highlightTokens.some(t => t.type === "Check pdx template version")) return "Check pdx template version";
+  if (highlightTokens.some(t => t.type === "Importing PDX Container:")) return "Importing PDX Container:";
+  if (highlightTokens.some(t => t.type === "Extracted VIN from FA file:")) return "Extracted VIN from FA file:";
+  if (highlightTokens.some(t => t.type === "Check for cached signed NCDs")) return "Check for cached signed NCDs";
+  if (highlightTokens.some(t => t.type === "Processed SVK:")) return "Processed SVK:";
+  if (highlightTokens.some(t => t.type === "Read SVT before TAL execution started")) return "Read SVT before TAL execution started";
+  if (highlightTokens.some(t => t.type === "Checking Mirror-Protocol started")) return "Checking Mirror-Protocol started";
+  if (highlightTokens.some(t => t.type === "Status readSecureEcuMode:")) return "Status readSecureEcuMode:";
+  if (highlightTokens.some(t => t.type === "Checking Programming Protection \"PLUS\" started")) return "Checking Programming Protection \"PLUS\" started";
+  if (highlightTokens.some(t => t.type === "Checking Programming Protection \"BASIC\" started")) return "Checking Programming Protection \"BASIC\" started";
+  if (highlightTokens.some(t => t.type === "TAL execution started.")) return "TAL execution started.";
+  if (highlightTokens.some(t => t.type === "prepareECUforMirrorFlash started")) return "prepareECUforMirrorFlash started";
+  if (highlightTokens.some(t => t.type === "Generating Tal for")) return "Generating Tal for";
+  if (highlightTokens.some(t => t.type === "finalizeECUMirrorFlash finished")) return "finalizeECUMirrorFlash finished";
+  if (highlightTokens.some(t => t.type === "E-Sys ecuMirrorDeploy TA started")) return "E-Sys ecuMirrorDeploy TA started";
+  if (highlightTokens.some(t => t.type === "cleanup_esys_process")) return "cleanup_esys_process";
+  if (highlightTokens.some(t => t.type === "DEBUG_PORT_AVAILABILITY")) return "DEBUG_PORT_AVAILABILITY";
+  if (highlightTokens.some(t => t.type === "E-Sys ecuActivate TA started")) return "E-Sys ecuActivate TA started";
+  if (highlightTokens.some(t => t.type === "E-Sys ecuPoll TA started")) return "E-Sys ecuPoll TA started";
+  if (highlightTokens.some(t => t.type === "finalizeVehicleFlash finished")) return "finalizeVehicleFlash finished";
+  if (highlightTokens.some(t => t.type === "finalizeVehicleCoding started")) return "finalizeVehicleCoding started";
+  if (highlightTokens.some(t => t.type === "prepareVehicleForCoding started")) return "prepareVehicleForCoding started";
+  if (highlightTokens.some(t => t.type === "MSM_checks summary report")) return "MSM_checks summary report";
+  if (highlightTokens.some(t => t.type === "Your program receive_notification with data")) return "Your program receive_notification with data";
+  if (highlightTokens.some(t => t.type === "ipcClientsResponse")) return "ipcClientsResponse";
+  if (highlightTokens.some(t => t.type === "TAS-SIM")) return "TAS-SIM";
+  if (highlightTokens.some(t => t.type === "E-Sys cdDeploy TA started")) return "E-Sys cdDeploy TA started";
+  if (highlightTokens.some(t => t.type === "setup_dut_certif")) return "setup_dut_certif";
+  if (highlightTokens.some(t => t.type === "itf.pybus_sim.basic_rbs")) return "itf.pybus_sim.basic_rbs";
+  if (highlightTokens.some(t => t.type === "Send command: requestID:")) return "Send command: requestID:";
+  if (highlightTokens.some(t => t.type === "executionStatusOK")) return "executionStatusOK";
+  if (highlightTokens.some(t => t.type === "executionStatusOther")) return "executionStatusOther";
+  if (highlightTokens.some(t => t.type === "libStatusDone")) return "libStatusDone";
+  if (highlightTokens.some(t => t.type === "libStatusOther")) return "libStatusOther";
+  if (highlightTokens.some(t => t.type === "execution_resultOther")) return "execution_resultOther";
+  if (highlightTokens.some(t => t.type === "execution_result_SUCCESS")) return "execution_result_SUCCESS";
+  if (highlightTokens.some(t => t.type === "prepareECUforMirrorFlash started")) return "prepareECUforMirrorFlash started";
+  if (highlightTokens.some(t => t.type === "There was an error during TAL execution, please check the log files.")) return "There was an error during TAL execution, please check the log files.";
+  if (highlightTokens.some(t => t.type === "finalizeECUMirrorFlash finished")) return "finalizeECUMirrorFlash finished";
+  if (highlightTokens.some(t => t.type === "TAL-Execution finished with status:")) return "TAL-Execution finished with status:";
+  if (highlightTokens.some(t => t.type === "finalizeECUMirrorFlash finished with error")) return "finalizeECUMirrorFlash finished with error";
+  if (highlightTokens.some(t => t.type === "MirrorProtocolPrepFailed")) return "MirrorProtocolPrepFailed";
   return "standard";
 }
 
@@ -900,4 +1200,179 @@ this.skipCurrentTestCaseLogs = false;
     };
     return levelMap[level.toUpperCase()] || level;
   }
+}
+
+export function buildCollapseMap(entries) {
+  const collapsedTestCases = {};
+  const collapsedSections  = {};
+  entries.forEach((e, idx) => {
+    if (e.isTestCase) {
+      collapsedTestCases[idx] = true;
+      collapsedSections[idx]  = { setup: true, call: true, teardown: true };
+    }
+  });
+  return { collapsedTestCases, collapsedSections };
+}
+
+export function buildFinalSections(entries) {
+  const out = { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [] };
+  let cur = null;
+
+  for (const e of entries) {
+    if (e.category === "finalFAILURES") { 
+      console.log("Building final section for failures:", e);
+      cur = "finalFAILURES"; 
+      e.isFinalSection = true;
+      e.currentTestCase=null;
+      e.parentTestCase=null;
+      continue; 
+    }
+    if (e.category === "finalERRORS") { 
+      console.log("Building final section for errors:", e);
+      cur = "finalERRORS";   
+      e.isFinalSection = true;
+      e.currentTestCase=null;
+      e.parentTestCase=null;
+      continue; 
+    }
+    if (e.category === "finalWARNINGS") { 
+      console.log("Building final section for warnings:", e);
+      cur = "finalWARNINGS"; 
+      e.isFinalSection = true;
+      e.currentTestCase=null;
+      e.parentTestCase=null;
+      continue; 
+    }
+
+    if (cur) {
+      console.log("Adding entry to final section:", e, "in section", cur);
+      e.isFinalSectionContent = true;
+      e.currentTestCase=null;
+      e.parentTestCase=null;
+      e.parentFinalSection = cur;
+      out[cur].push(e);
+    }
+  }
+  console.log("Final sections built:", JSON.stringify(out, null, 2));
+  return out;
+}
+
+export function flagSectionsAndParents(entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    e.section        = getSectionName(e.rawLine || e.message);
+    e.hasFailure     = isFailureLine(e.rawLine || e.message);
+    e.parentTestCase = findParentTestCaseName(e, entries, i);
+  }
+}
+
+export function buildFailuresIndex(entries) {
+  const map = new Map();          
+  const re = /([\w/]+\.py)::(\w+)/;
+  entries.forEach((e, idx) => {
+    if (!e.hasFailure) return;
+    const m = (e.rawLine || e.message).match(re);
+    if (!m) return;
+    const key = m[2];
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(idx);
+  });
+  return Object.fromEntries(map);
+}
+export function buildSubEntriesByTcIdx(entries) {
+  const map = {};
+  let currentTcIdx = null;
+  let currentSection = null;
+  let currentLines = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+
+    if (e.isTestCase) {
+      if (currentTcIdx !== null) {
+        if (!map[currentTcIdx]) map[currentTcIdx] = [];
+        if (currentSection && currentLines.length) {
+          map[currentTcIdx].push({
+            section: currentSection,
+            lines: [...currentLines],
+            hasFailure: currentLines.some(l => l.hasFailure)
+          });
+        }
+      }
+      currentTcIdx = i;
+      currentSection = null;
+      currentLines = [];
+      map[currentTcIdx] = [];
+      continue;
+    }
+
+    if (currentTcIdx === null) continue;
+
+    if (typeof e.isFinalSection === "function" ? e.isFinalSection() : e.isFinalSection) {
+      if (currentSection && currentLines.length) {
+        map[currentTcIdx].push({
+          section: currentSection,
+          lines: [...currentLines],
+          hasFailure: currentLines.some(l => l.hasFailure)
+        });
+      }
+      currentTcIdx = null; 
+      currentSection = null;
+      currentLines = [];
+      continue;
+    }
+
+    const sec = e.section;
+    if (sec && sec !== currentSection) {
+      if (currentSection && currentLines.length) {
+        map[currentTcIdx].push({
+          section: currentSection,
+          lines: [...currentLines],
+          hasFailure: currentLines.some(l => l.hasFailure)
+        });
+      }
+      currentSection = sec;
+      currentLines = [e];
+    } else {
+      currentLines.push(e);
+    }
+  }
+
+  if (currentTcIdx !== null && currentSection && currentLines.length) {
+    map[currentTcIdx].push({
+      section: currentSection,
+      lines: [...currentLines],
+      hasFailure: currentLines.some(l => l.hasFailure)
+    });
+  }
+  
+  return map;
+}
+
+
+function getSectionName(line = "") {
+  const msg = line.toLowerCase();
+  if (msg.includes('live log setup'))   return 'setup';
+  if (msg.includes('live log call'))    return 'call';
+  if (msg.includes('live log teardown')) return 'teardown';
+  return null;
+}
+
+function isFailureLine(line = "") {
+  const triggers = [
+    "setup result: failed",
+    "call result: failed",
+    "teardown result: failed"
+  ];
+  return triggers.some(t => line.includes(t));
+}
+
+function findParentTestCaseName(entry, entries, idx) {
+  for (let i = idx; i >= 0; i--) {
+    if (entries[i].isTestCase) {
+      const parts = entries[i].message.split('::');
+      return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    }
+  }
+  return "Unknown Test Case";
 }

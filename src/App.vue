@@ -1,74 +1,100 @@
 <template>
 <div class="app-container">
+  <div class="upload-block">
     <div
-  v-if="!logData && !loading"
-  class="upload-area"
-  @dragover.prevent="dragover = true"
-  @dragleave="dragover = false"
-  @drop="handleDrop($event); dragover = false"
-  :class="{ 'drag-active': dragover }"
->
-  <div class="upload-content">
-    <div class="upload-icon">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z" fill="currentColor"/>
-      </svg>
+      v-if="showUpload"
+      class="upload-area"
+      @dragover.prevent="dragover = true"
+      @dragleave="dragover = false"
+      @drop="handleDrop($event); dragover = false"
+      :class="{ 'drag-active': dragover }"
+    >
+      <div class="upload-content">
+        <div class="upload-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <h2>One-click log analysis</h2>
+        <p class="subtitle">Drag and drop your log file or</p>
+        <label class="file-upload-button">
+          <input type="file" @change="handleFileUpload" hidden />
+          <span>Explore files</span>
+        </label>
+        <p class="file-types">Supported formats: .log, .txt, .json</p>
+      </div>
     </div>
-    <h2>Analysez vos logs en un clic</h2>
-    <p class="subtitle">Glissez-déposez votre fichier log ou</p>
-    <label class="file-upload-button">
-      <input type="file" @change="handleFileUpload" hidden/>
-      <span>Parcourir les fichiers</span>
-    </label>
-    <p class="file-types">Formats supportés: .log, .txt, .json</p>
+
+    <div v-show="loading" class="loading-inline" aria-live="polite">
+      <div class="loading-dot"></div>  
+      <div class="progress-container">
+        <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+      </div>
+      <p class="progress-text">Analyzing... {{ Math.floor(progress) }}%</p>
+    </div>
   </div>
-</div>
-<div v-if="loading" class="loading-screen">
-  <div class="progress-container">
-    <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+
+  <div v-if="!loading && logData" class="results">
   </div>
-  <p class="progress-text">Analyse en cours... {{ progress - 55 }}%</p>
-</div>
+
 
     <div v-if="logData && !loading" class="main-content">
       
       <div class="log-display">
         <div class="log-header">
-         <div class="left-controls">
+          <div class="header-left">
+            <div class="button-group">
+              <button @click="collapseAllSections" class="icon-btn btn-close"></button>
+              <button @click="expandAllSections" class="icon-btn btn-open"></button>
+            </div>
+          </div>
+
+  
+  <div class="header-right">
     <select v-model="selectedLogLevel" class="log-level-filter">
       <option value="">📂 All Levels</option>
       <option value="DBG">🐛 DBG</option>
       <option value="INF">ℹ️ INF</option>
       <option value="WARN">⚠️ WARN</option>
+      <option value="ERR">❗ ERR</option>
     </select>
-    <div class="legend">
-      <span class="legend-item"></span>
-      <span class="legend-item"></span>
-      <span class="legend-item"></span>
-    </div>
-  </div>
+    
 
+    <div class="search-container">
   <input
     v-model="searchQuery"
     @input="handleSearch"
+    @focus="showSuggestions = true"
+    @blur="hideSuggestions"
     placeholder="🔍 Search logs..."
     class="search-bar"
   />
-        </div>
+  <div v-if="showSuggestions && suggestions.length" class="suggestions-list">
+    <div 
+      v-for="(suggestion, index) in suggestions" 
+      :key="index"
+      @mousedown="selectSuggestion(suggestion)"
+      class="suggestion-item"
+    >
+      {{ suggestion }}
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+
         
         <div class="log-raw-content">
-<div class="button-group">
-  <button @click="collapseAllSections" class="icon-btn btn-close"></button>
-  <button @click="expandAllSections" class="icon-btn btn-open"></button>
-</div>
+
 
   <div
   v-for="(entry, idx) in parsedEntries"
-  :key="idx"
+  :key="entry.id"
   :id="'testcase-' + idx"
 >
+
   <div
-    v-if="entry.isTestCase && entry.isFinalSection===false && entry.isFinalSectionContent===false"
+    v-if="entry.isTestCase && entry.isFinalSection===false && entry.isFinalSectionContent===false && subEntriesByTcIdx[idx]"
     class="log-entry testcase-header"
     :class="'testcase-' + entry.testCaseStatus"
     @click="toggleTestCase(idx)"
@@ -77,27 +103,26 @@
       background: entry.getBackgroundColor(),
     }"
   >
-    <span class="toggle-icon">{{ isTestCaseClosed(idx) ? '▶' : '▼' }}</span>
+    <span class="toggle-icon">{{ isTestCaseClosed(idx) ? '▼' : '▶' }}</span>
     <strong>{{ entry.message }}</strong>
   </div>
 
   <div
-    v-if="entry.isTestCase"
-    v-show="!isTestCaseClosed(idx)"
+    v-if="entry.isTestCase && subEntriesByTcIdx[idx]"
+    v-show="isTestCaseClosed(idx)"
     class="testcase-body"
   >
-    <div
-      v-for="(group, subIdx) in getTestCaseSubEntries(idx)"
-      :key="subIdx"
-    >
-      <div
-        v-if="group.section"
+    <template v-for="(group, subIdx) in getSafeArray(subEntriesByTcIdx[idx])" :key="`group-${idx}-${subIdx}`">
+
+
+
+    <div v-if="group && 'section' in group && group.section"
         class="log-entry testcase-header section-header"
         @click="toggleSection(idx, group.section)"
         style="padding-left: 20px; cursor: pointer; background-color: #f0f0f0;"
       >
         <span class="toggle-icon">
-          {{ isSectionClosed(idx, group.section) ? '▶' : '▼' }}
+          {{ isSectionClosed(idx, group.section) ? '▼' : '▶' }}
         </span>
         <strong v-if="group.section">
           Live Log {{ group.section.charAt(0).toUpperCase() + group.section.slice(1) }}
@@ -107,15 +132,16 @@
 
       <template v-if="group.section">
         <div
-          v-for="(entry, lineIdx) in group.lines"
+          v-for="(entry, lineIdx) in filteredLines(group.lines)"
           :key="lineIdx"
-          v-show="!isSectionClosed(idx, group.section)"
+          :id="`main-line-${idx}-${lineIdx}`"
+         v-show="isSectionClosed(idx, group.section)"
           class="log-entry"
           v-html="renderLine(entry)"
           :class="{
-            'failed-line': isFailureLine(entry.message)
+            'failed-line': entry.hasFailure
           }"
-          @click="handleLineClick(entry.message, getEntryIndex(entry, idx))"
+          @click=" scrollToFailureDetails(entry.rawLine , entry.parentTestCase)"
           style="padding-left: 30px; cursor: pointer;"
         ></div>
       </template>
@@ -126,14 +152,9 @@
           :key="lineIdx"
           class="log-entry"
           v-html="renderLine(entry)"
-          :class="{
-            'failed-line': isFailureLine(entry.message)
-          }"
-          @click="handleLineClick(entry.message, getEntryIndex(entry, idx))"
-          style="cursor: pointer;"
         ></div>
       </template>
-    </div>
+    </template>
   </div>
 
     
@@ -147,7 +168,7 @@
     </div>
     <div v-show="!collapsedFinalSections['finalERRORS']" class="section-content">
       <div
-        v-for="(line, index) in getLinesBetweenErrorsAndWarnings()"
+        v-for="(line, index) in finalSections.finalERRORS"
         :key="'errors-content-' + index"
         class="log-entry final-section-content"
         v-html="renderLine(line)"
@@ -165,7 +186,7 @@
     </div>
     <div v-show="!collapsedFinalSections['finalFAILURES']" class="section-content">
       <div
-        v-for="(line, index) in getLinesBetweenFailuresAndErrors()"
+        v-for="(line, index) in 	finalSections.finalFAILURES"
         :key="'failures-content-' + index"
         class="log-entry final-section-content"
         v-html="renderLine(line)"
@@ -186,7 +207,7 @@
     </div>
     <div v-show="!collapsedFinalSections['finalWARNINGS']" class="section-content">
       <div
-        v-for="(line, index) in getLinesAfterWarnings()"
+        v-for="(line, index) in finalSections.finalWARNINGS"
         :key="'warnings-content-' + index"
         class="log-entry final-section-content"
         v-html="renderLine(line)"
@@ -195,14 +216,20 @@
     </div>
   </div>
 
-       <div v-if="!entry.isTestCase && !isInsideTestCase(idx) && !entry.isFinalSection && !entry.isFinalSectionContent"
+       <div v-if="!entry.isTestCase && !entry.parentTestCase && !entry.isFinalSection && !entry.isFinalSectionContent && !(entry.currentTestCase)"
         class="log-entry"
         v-html="renderLine(entry)"
-      ></div>
+      >
+      
+      
+    </div>
+
     </div>
   </div>
         </div>
-        <footer v-if="searchFooterVisible && searchQuery" class="search-footer">
+        <footer v-if="searchFooterVisible && searchQuery" class="search-footer"  :style="{ height: footerHeight + 'px' }">
+           <div class="resize-handle" @mousedown="startResize"></div>
+
   <div class="search-footer-header">
     <h3 v-if="searchResults.length">{{ searchResults.length }} results found</h3>
     <h3 v-else>No results found</h3>
@@ -211,21 +238,20 @@
    
   </div>
 
-  <div class="search-footer-content">
+  <div ref="scrollContainer" class="search-footer-content">
     <div
-      v-for="(results, testCaseName) in groupedSearchResults"
-      :key="testCaseName"
+      v-for="group in groupedSearchResults"
+      :key="group.tcIdx"
       class="search-result-group"
     >
-      <div class="search-result-title"><strong>{{ testCaseName }}</strong></div>
+      <div class="search-result-title"><strong>{{ group.testCaseName }}</strong></div>
 
-      <div
-        v-for="result in results"
-        :key="result.entry.id || result.idx"
-        class="search-highlight clickable"
-        @click="scrollToSearchResult(result.entry)"
-        v-html="renderSearchLine(result.entry, searchQuery)"
-      ></div>
+    <div v-for="r in group.results" :key="`${r.tcIdx}-${r.lineIdx}`"
+      :id="`main-line-${tcIdx}-${lineIdx}`"
+       @click="scrollToLine(r.tcIdx, r.section, r.lineIdx)"
+       v-html="r.line.rawLine.replace(new RegExp(searchQuery, 'gi'), '<mark>$&</mark>')"
+       class="line">
+  </div>
     </div>
   </div>
 </footer>
@@ -250,7 +276,10 @@ function escapeHtml(text) {
 export default {
   data() {
     return {
+      finalSections: { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [] },
+    subEntriesByTcIdx: {},   
       logData: '',
+      dragover: false,
       parsedEntries: [],
       logParser: null,
       collapsedTestCases: {},
@@ -261,272 +290,203 @@ export default {
       finalWARNINGS: true},
       loading: false,
       progress: 0,
-      linesBetweenFailuresAndErrors: [],
-      linesBetweenErrorsAndWarnings: [],
-      linesAfterWarnings: [],
       searchFooterVisible: true,
       selectedLogLevel: '',
       searchQuery: '',
       searchResults: [],
       entries: [],
-    };
+      footerHeight: 260,           
+      isResizing: false,
+      startY: 0,
+      startHeight: 0,
+      showSuggestions: false,
+      suggestions: [
+      'erreur',
+      'avertissement',
+      'info',
+      'debug',
+      'succès',
+      'connexion',
+      'déconnexion'
+    ]
+    }
   },
 
  computed: {
-    groupedFilteredEntries() {
-  const groups = {};
-  let currentTestCase = 'Global';
-
-  this.parsedEntries.forEach((entry, idx) => {
-    const matchesLevel =
-      !this.selectedLogLevel || new RegExp(`\\[${this.selectedLogLevel}\\]`).test(entry.rawLine || entry.message || '');
-
-    if (!matchesLevel) return;
-
-    if (entry.isTestCase) {
-      currentTestCase = this.extractTestCaseName(entry.message);
-    }
-
-    if (!groups[currentTestCase]) {
-      groups[currentTestCase] = [];
-    }
-
-    groups[currentTestCase].push({ entry, idx });
-  });
-
-  return groups;
-}
-,
-  filteredEntries() {
-    if (!this.selectedLogLevel) return this.parsedEntries;
-
-    const levelPattern = new RegExp(`\\[${this.selectedLogLevel}\\]`);
-
-    return this.parsedEntries.filter(entry => {
-      const line = entry.rawLine || entry.message || '';
-      return levelPattern.test(line);
-    });
-  },
+   showUpload() {
+      return this.loading || !this.logData;
+    },
   groupedSearchResults() {
-    const groups = {};
+  const groups = {};
 
-    for (const result of this.searchResults) {
-      const entry = result.entry;
-      const idx = this.parsedEntries.indexOf(entry);
+  for (const result of this.searchResults) {
+    const { tcIdx, line } = result;
+    const testCaseName = line?.currentTestCase || 'Unknown Test Case';
 
-      let testCaseName = 'Unknown Test Case';
-      for (let i = idx; i >= 0; i--) {
-        if (this.parsedEntries[i].isTestCase) {
-          testCaseName = this.parsedEntries[i].message;
-          break;
-        }
-      }
+    const key = `${testCaseName}_${tcIdx}`;
 
-      if (!groups[testCaseName]) {
-        groups[testCaseName] = [];
-      }
-
-      groups[testCaseName].push(result);
+    if (!groups[key]) {
+      groups[key] = {
+        testCaseName,
+        tcIdx,
+        results: [],
+      };
     }
 
-    return groups;
-  },
+    groups[key].results.push(result);
+  }
 
+  return Object.values(groups);
+},
   
 },
 methods: {
-  collapseAllSections() {
-  this.parsedEntries.forEach((entry, index) => {
-    if (entry.isTestCase) {
-      this.collapsedTestCases[index] = true;
-      this.collapsedSections[index] = {
-        setup: true,
-        call: true,
-        teardown: true,
-      };
-    }
-  });
-
-  this.collapsedFinalSections = {
-    finalFAILURES: true,
-    finalERRORS: true,
-    finalWARNINGS: true,
-  };
-},
-expandAllSections() {
-  this.parsedEntries.forEach((entry, index) => {
-    if (entry.isTestCase) {
-      this.collapsedTestCases[index] = false;
-      this.collapsedSections[index] = {
-        setup: false,
-        call: false,
-        teardown: false,
-      };
-    }
-  });
-
-  this.collapsedFinalSections = {
-    finalFAILURES: false,
-    finalERRORS: false,
-    finalWARNINGS: false,
-  };
-},
-   findParentTestCaseName(entry) {
-  const idx = this.parsedEntries.indexOf(entry);
-  if (idx === -1) return "Unknown Test Case";
-
-  for (let i = idx; i >= 0; i--) {
-    const e = this.parsedEntries[i];
-    if (e.isTestCase) {
-      return this.extractTestCaseName(e.message);
-    }
-  }
-
-  return "Unknown Test Case";
-}
-,
-scrollToSearchResult(entry) {
-  const idx = this.parsedEntries.indexOf(entry);
-  if (idx === -1) return;
-
-  let parentTestCaseIndex = null;
-  for (let i = idx; i >= 0; i--) {
-    if (this.parsedEntries[i].isTestCase) {
-      parentTestCaseIndex = i;
-      break;
-    }
-  }
-
-  if (parentTestCaseIndex !== null) {
-    // Step 1: Unfold the test case
-    if (this.collapsedTestCases[parentTestCaseIndex]) {
-      this.collapsedTestCases[parentTestCaseIndex] = false;
-    }
-
-    // Step 2: Unfold the section if needed
-    const section = this.getSectionName(entry);
-    if (section) {
-      if (!this.collapsedSections[parentTestCaseIndex]) {
-        this.collapsedSections[parentTestCaseIndex] = {};
-      }
-      if (this.collapsedSections[parentTestCaseIndex][section]) {
-        this.collapsedSections[parentTestCaseIndex][section] = false;
-      }
-    }
-  }
-
-  // Step 3: Wait for DOM update *after* test case is unfolded
-  this.$nextTick(() => {
+   hideSuggestions() {
     setTimeout(() => {
-      const el = document.getElementById(`log-entry-${idx}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('flash-highlight');
-        setTimeout(() => el.classList.remove('flash-highlight'), 1500);
-      } else {
-        console.warn(`Element log-entry-${idx} not found`);
-      }
-    }, 50); // Small delay gives Vue time to render the unfolded section
+      this.showSuggestions = false
+    }, 200)
+  },
+  selectSuggestion(suggestion) {
+    this.searchQuery = suggestion
+    this.showSuggestions = false
+    this.handleSearch()
+  },
+  startResize(e) {
+    this.isResizing = true;
+    this.startY = e.clientY;
+    this.startHeight = this.footerHeight;
+
+    document.addEventListener('mousemove', this.doResize);
+    document.addEventListener('mouseup', this.stopResize);
+    e.preventDefault();
+  },
+  doResize(e) {
+    if (!this.isResizing) return;
+    const dy = this.startY - e.clientY;   
+    let newH = this.startHeight + dy;
+    newH = Math.max(120, Math.min(newH, 600)); 
+    this.footerHeight = newH;
+  },
+  stopResize() {
+    this.isResizing = false;
+    document.removeEventListener('mousemove', this.doResize);
+    document.removeEventListener('mouseup', this.stopResize);
+  },
+
+  filteredLines(lines) {
+
+  if (!this.selectedLogLevel) {
+    return lines;
+  }
+
+  const levelPattern = new RegExp(`\\[${this.selectedLogLevel}\\]`);
+  const filtered = lines.filter(line =>
+    levelPattern.test(line.rawLine || line.level || '')
+  );
+
+  return filtered;
+},
+
+    getSafeArray(arrayLike) {
+    if (!arrayLike) return [];
+    return Array.isArray(arrayLike) ? arrayLike : Array.from(arrayLike);
+  },
+
+scrollToLine(tcIdx, section, lineIdx) {
+  this.collapsedTestCases[tcIdx] = true;
+  this.collapsedSections[tcIdx][section] = true;
+
+  this.$nextTick(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const id = `main-line-${tcIdx}-${lineIdx}`;
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('flash');
+          setTimeout(() => el.classList.remove('flash'), 4000);
+        } else {
+          console.warn('scrollToLine: ligne introuvable', id);
+        }
+      });
+    });
   });
 },
 
-renderSearchLine(entry, keyword) {
-  const content = entry.rawLine || '';
-  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape regex
-  const regex = new RegExp(escapedKeyword, 'gi'); // global, case-insensitive
-  const highlighted = content.replace(regex, (match) => `<mark>${match}</mark>`);
-  return highlighted;
-},
 
- handleSearch() {
+
+handleSearch() {
   const query = this.searchQuery.trim().toLowerCase();
-
   if (!query) {
     this.searchResults = [];
     return;
   }
 
-  // ✅ Automatically reopen the search footer
   this.searchFooterVisible = true;
 
-  this.searchResults = this.parsedEntries
-    .map((entry, idx) => ({ entry, idx }))
-    .filter(({ entry }) =>
-      String(entry.message || entry.rawLine || '').toLowerCase().includes(query)
-    );
-}
-,
+  const results = [];
 
-  
-  scrollToEntry(index) {
-  const el = document.getElementById(`testcase-${index}`);
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.style.backgroundColor = '#ffdddd';
-    setTimeout(() => {
-      el.style.backgroundColor = '';
-    }, 1500);
-  }
-},
-
-
-  getEntryIndex(entry, testCaseIndex) {
-      for (let i = 0; i < this.parsedEntries.length; i++) {
-        if (this.parsedEntries[i] === entry) {
-          return i;
-        }
-      }
-      return testCaseIndex;
-    },
-
-   handleLineClick(line, entryIndex) {
-      console.log('Clic sur ligne:', line, 'Index:', entryIndex);
-      
-      let messageText = '';
-      if (typeof line === 'string') {
-        messageText = line;
-      } else if (line && typeof line === 'object') {
-        messageText = line[0] || line.input || line.message || '';
-      }
-      
-      console.log('Message extrait:', messageText);
-      
-      if (this.isFailureLine(messageText)) {
-        console.log('Ligne d\'échec détectée');
-        let testCaseIndex = entryIndex;
-        for (let i = entryIndex; i >= 0; i--) {
-          if (this.parsedEntries[i] && this.parsedEntries[i].isTestCase) {
-            testCaseIndex = i;
-            break;
-          }
+  for (let tcIdx = 0; tcIdx < this.parsedEntries.length; tcIdx++) {
+    for (const [subIdx, group] of Object.entries(this.subEntriesByTcIdx[tcIdx] || {})) {
+      console.log( subIdx);
+      const section = group.section;
+      if (!section) continue;
+    const lines = group.lines || [];
+    
+    lines.forEach((line, lineIdx) => {
+      const content = line.rawLine || '';
+      if (content.toLowerCase().includes(query)) {
+          results.push({ tcIdx, section, lineIdx, line });
         }
         
-        console.log('Index du test case parent:', testCaseIndex);
-        this.checkFailureTriggersAndScrollForEntry(testCaseIndex);
-      }
-    },
- isFailureLine(line) {
-      if (!line) return false;
-      let messageText = '';
-      if (typeof line === 'string') {
-        messageText = line;
-      } else if (line && typeof line === 'object') {
-        messageText = line[0] || line.input || line.message || '';
-      }
-      const failureTriggers = [
-        "setup result: failed",
-        "call result: failed",
-        "teardown result: failed"
-      ];
-      return failureTriggers.some(trigger => messageText.includes(trigger));
-    },
-   getSectionName(entry) {
-  const msg = (entry.rawLine || entry.message || '').toLowerCase();
-  if (msg.includes('live log setup')) return 'setup';
-  if (msg.includes('live log call')) return 'call';
-  if (msg.includes('live log teardown')) return 'teardown';
-  return null;
+      });
+    tcIdx=tcIdx+lines.length;
+    }
+    }
+    this.searchResults = results;
 },
+collapseAllSections() {
+  const newCollapsedTestCases = {};
+  for (const idx in this.collapsedTestCases) {
+    newCollapsedTestCases[idx] = false;
+  }
+  this.collapsedTestCases = newCollapsedTestCases;
+  const newCollapsedSections = {};
+  for (const tcIdx in this.collapsedSections) {
+    newCollapsedSections[tcIdx] = {};
+    for (const section in this.collapsedSections[tcIdx]) {
+      newCollapsedSections[tcIdx][section] =false;
+    }
+  }
+  this.collapsedSections = newCollapsedSections;
+   const newCollapsedFinalSections = {};
+  for (const sectionType in this.collapsedFinalSections) {
+    newCollapsedFinalSections[sectionType] = true; // fermé
+  }
+  this.collapsedFinalSections = newCollapsedFinalSections;
+},
+
+expandAllSections() {
+  const newCollapsedTestCases = {};
+  for (const idx in this.collapsedTestCases) {
+    newCollapsedTestCases[idx] = true;
+  }
+  this.collapsedTestCases = newCollapsedTestCases;
+
+  const newCollapsedSections = {};
+  for (const tcIdx in this.collapsedSections) {
+    newCollapsedSections[tcIdx] = {};
+    for (const section in this.collapsedSections[tcIdx]) {
+      newCollapsedSections[tcIdx][section] = true; 
+    }
+  }
+  this.collapsedSections = newCollapsedSections;
+  const newCollapsedFinalSections = {};
+  for (const sectionType in this.collapsedFinalSections) {
+    newCollapsedFinalSections[sectionType] = false; 
+  }
+  this.collapsedFinalSections = newCollapsedFinalSections;
+}, 
 toggleFinalSection(sectionType) {
     this.collapsedFinalSections = {
       ...this.collapsedFinalSections,
@@ -538,186 +498,61 @@ toggleTestCase(index) {
   if (this.collapsedTestCases[index] === undefined) {
     this.collapsedTestCases[index] = true;
   }
-  
-  this.collapsedTestCases = {
-    ...this.collapsedTestCases,
-    [index]: !this.collapsedTestCases[index]
-  };
+  this.collapsedTestCases[index] = !this.collapsedTestCases[index];
+
+  this.collapsedTestCases = { ...this.collapsedTestCases };
 },
 
-    getFinalSectionContent(sectionType) {
-    const lines = [];
-    let sectionIndex = -1;
-    for (let i = 0; i < this.parsedEntries.length; i++) {
-      if (this.parsedEntries[i].category === sectionType && this.parsedEntries[i].isFinalSection) {
-        sectionIndex = i;
-        break;
-      }
-    }
-    if (sectionIndex === -1) return lines;
-    let nextSectionIndex = this.parsedEntries.length;
-    const finalSectionTypes = ["finalFAILURES", "finalERRORS", "finalWARNINGS"];
-    for (let i = sectionIndex + 1; i < this.parsedEntries.length; i++) {
-      const entry = this.parsedEntries[i];
-      if (finalSectionTypes.includes(entry.category) && entry.isFinalSection) {
-        nextSectionIndex = i;
-        break;
-      }
-    }
-    
-    for (let i = sectionIndex + 1; i < nextSectionIndex; i++) {
-      const entry = this.parsedEntries[i];
-      if (!finalSectionTypes.includes(entry.category)) {
-        lines.push(entry);
-      }
-    }
-    
-    return lines;
-  },
 
-  getLinesBetweenFailuresAndErrors() {
-    return this.getFinalSectionContent('finalFAILURES');
-  },
+ 
+scrollToFailureDetails(e ,className) {
+  const triggers = [
+    "setup result: failed",
+    "call result: failed",
+    "teardown result: failed"
+  ];
+  if (triggers.some(t => e.includes(t))) {
 
-  getLinesBetweenErrorsAndWarnings() {
-    return this.getFinalSectionContent('finalERRORS');
-  },
 
-  getLinesAfterWarnings() {
-    return this.getFinalSectionContent('finalWARNINGS');
-  },
-
-   preprocessEntries() {
-    const finalSectionTypes = ["finalFAILURES", "finalERRORS", "finalWARNINGS"];
-    
-    finalSectionTypes.forEach(sectionType => {
-      if (!(sectionType in this.collapsedFinalSections)) {
-        this.$set(this.collapsedFinalSections, sectionType, true);
-      }
-    });
-    
-    for (let i = 0; i < this.parsedEntries.length; i++) {
-      const entry = this.parsedEntries[i];
-      
-      if (finalSectionTypes.includes(entry.category)) {
-        entry.isFinalSection = true;
-      }
-    }
-  },
-
-    checkFailureTriggersAndScrollForEntry(testCaseIndex) {
-      const entry = this.parsedEntries[testCaseIndex];
-      
-      if (!entry || !entry.isTestCase) {
-        console.warn('Pas un test case valide à l\'index:', testCaseIndex);
-        return;
-      }
-
-      console.log('Test case trouvé:', entry);
-      
-      // Extraire le message du test case
-      let messageText = '';
-      if (typeof entry.message === 'string') {
-        messageText = entry.message;
-      } else if (entry.message && typeof entry.message === 'object') {
-        messageText = entry.message[0] || entry.message.input || entry.message.message || '';
-      }
-
-      console.log('Message du test case:', messageText);
-
-      // Patterns pour extraire le nom de la classe
-      const patterns = [
-        /([\w/]+\.py)::(\w+)::/,  // Pattern principal
-        /(\w+\.py)::(\w+)/,       // Pattern alternatif
-        /::(\w+)::/,              // Pattern simple
-        /class\s+(\w+)/,          // Pattern pour les classes
-        /Test case (\w+)/         // Pattern spécifique aux messages de test
-      ];
-
-      for (const pattern of patterns) {
-        const match = messageText.match(pattern);
-        if (match) {
-          const className = match[2] || match[1]; 
-          console.log('Nom de classe extrait:', className);
-          this.scrollToFailureDetails(className);
-          return;
-        }
-      }
-      
-      console.warn('Impossible d\'extraire le nom de classe du message:', messageText);
-    },
- scrollToFailureDetails(className) {
-  const logLinesFailed = this.getLinesBetweenFailuresAndErrors();
-  const logLinesErrors = this.getLinesBetweenErrorsAndWarnings();
-
+  const sections = ["finalERRORS", "finalFAILURES", "finalWARNINGS"];
   let sectionToToggle = null;
   let elementFound = null;
 
-  for (const line of logLinesFailed) {
-    let lineText = '';
-    if (typeof line === 'string') {
-      lineText = line;
-    } else if (line && typeof line === 'object') {
-      lineText = line[0] || line.input || line.message || '';
-    }
-    
-    if (lineText && lineText.includes(className)) {
-      sectionToToggle = 'finalERRORS';
-      const elements = document.querySelectorAll('.log-line, .log-entry');
-      for (const element of elements) {
-        const elementText = element.textContent || element.innerText || '';
-            if (elementText.includes(lineText.trim()) || 
-            (elementText.includes(className) && elementText.includes('_____'))) {
-          elementFound = element;
-          break;
-        }
-      }
-      
-      if (!elementFound) {
-        for (const element of elements) {
-          const elementText = element.textContent || element.innerText || '';
-          if (elementText.includes(className)) {
-            elementFound = element;
-            break;
-          }
-        }
-      }
-      
-      if (elementFound) break;
-    }
-  }
-  if (!elementFound) {
-    for (const line of logLinesErrors) {
-      let lineText = '';
-      if (typeof line === 'string') {
-        lineText = line;
-      } else if (line && typeof line === 'object') {
-        lineText = line[0] || line.input || line.message || '';
-      }
-      
-      if (lineText && lineText.includes(className)) {
-        sectionToToggle = 'finalFAILURES'; 
+  const testCaseRegex = /([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)/;
+
+  for (const section of sections) {
+    const entries = this.finalSections[section] || [];
+    for (const entry of entries) {
+      let rawText = entry.rawLine || entry.message || "";
+
+      if (rawText.includes(className)) {
+        sectionToToggle = section;
+
+        const match = rawText.match(testCaseRegex);
+        const extractedTestCaseName = match ? match[1] : null;
 
         const elements = document.querySelectorAll('.log-line, .log-entry');
         for (const element of elements) {
           const elementText = element.textContent || element.innerText || '';
-          
-          if (elementText.includes(lineText.trim()) || 
-              (elementText.includes(className) && elementText.includes('_____'))) {
+          if (
+            elementText.includes(rawText.trim()) ||
+            (extractedTestCaseName && elementText.includes(extractedTestCaseName))
+          ) {
             elementFound = element;
             break;
           }
         }
-        
+
         if (elementFound) break;
       }
     }
+    if (elementFound) break;
   }
 
   if (elementFound && sectionToToggle) {
-      if (this.collapsedFinalSections[sectionToToggle]) {
+    if (this.collapsedFinalSections[sectionToToggle]) {
       this.toggleFinalSection(sectionToToggle);
-        setTimeout(() => {
+      setTimeout(() => {
         elementFound.scrollIntoView({ behavior: "smooth", block: "center" });
         elementFound.classList.add('highlight-failure');
         setTimeout(() => elementFound.classList.remove('highlight-failure'), 3000);
@@ -729,93 +564,35 @@ toggleTestCase(index) {
     }
   } else {
     console.warn("Aucun élément DOM trouvé pour la classe :", className);
-
+  }} else {
+    console.warn("Aucun déclencheur de failure trouvé dans le message :", e);
   }
 },
 
-getTestCaseSubEntries(startIndex) {
-      const result = [];
-      let currentSection = null;
-      let currentSectionLines = [];
-
-      for (let i = startIndex + 1; i < this.parsedEntries.length; i++) {
-        const entry = this.parsedEntries[i];
-  
-        if (entry.isTestCase) break;
-        if (entry.isFinalSection) break;
-        if (entry.isFinalSectionContent) break;
-
-        const section = this.getSectionName(entry);
-        
-        if (section) {
-          if (currentSection && currentSectionLines.length > 0) {
-            result.push({ 
-              section: currentSection, 
-              lines: currentSectionLines,
-              hasFailure: currentSectionLines.some(line => this.isFailureLine(line.message))
-            });
-          }
-          currentSection = section;
-          currentSectionLines = [];
-        }
-        
-        if (currentSection) {
-          currentSectionLines.push(entry);
-        } else {
-          result.push({ 
-            section: null, 
-            lines: [entry],
-            hasFailure: this.isFailureLine(entry.message)
-          });
-        }
-      }
-      if (currentSection && currentSectionLines.length > 0) {
-        result.push({ 
-          section: currentSection, 
-          lines: currentSectionLines,
-          hasFailure: currentSectionLines.some(line => this.isFailureLine(line.message))
-        });
-      }
-      
-      return result;
-    },
-
 toggleSection(tcIndex, section) {
+  // Initialiser l’objet de sections pour ce test case s’il n’existe pas
   if (!this.collapsedSections[tcIndex]) {
-    this.collapsedSections[tcIndex] = {
-      'setup': true,
-      'call': true,
-      'teardown': true,
-    };
+    this.collapsedSections[tcIndex] = {};
   }
-  
+
+  // Initialiser la section si absente
   if (this.collapsedSections[tcIndex][section] === undefined) {
     this.collapsedSections[tcIndex][section] = true;
   }
-  
+
+  // Inverser la valeur
   this.collapsedSections[tcIndex][section] = !this.collapsedSections[tcIndex][section];
-},
-initializeCollapsedStates() {
-  this.collapsedTestCases = {};
-  this.parsedEntries.forEach((entry, index) => {
-    this.collapsedTestCases[index] = true; 
-  });
-  this.collapsedSections = {};
-  this.parsedEntries.forEach((entry, tcIndex) => {
-    this.collapsedSections[tcIndex] = {
-      'setup': true,
-      'call': true,
-      'teardown': true,
-    };
-  });
-},
-isTestCaseClosed(index) {
-  return this.collapsedTestCases[index] !== false; 
+
+  // Forcer la réactivité
+  this.collapsedSections = { ...this.collapsedSections };
 },
 
+isTestCaseClosed(index) {
+  return this.collapsedTestCases[index] !== false;
+},
 
 isSectionClosed(tcIndex, section) {
-  return this.collapsedSections[tcIndex]?.[section] !== false; 
+  return this.collapsedSections[tcIndex]?.[section] !== false;
 },
 
 
@@ -833,6 +610,7 @@ isInsideTestCase(index) {
   }
   return text;
 },
+
     handleFileUpload(event) {
       const file = event.target.files[0];
       this.readLogFile(file);
@@ -850,7 +628,6 @@ isInsideTestCase(index) {
         this.logData = e.target.result;
         this.parseLogData();
       };
-      console.log('logData:', this.logData);
 
       reader.readAsText(file);
     },
@@ -858,6 +635,16 @@ isInsideTestCase(index) {
   this.loading = true;
   this.parsedEntries = [];
   this.stats = { startTime: Date.now() };
+
+  this.finalSections = {
+    finalFAILURES: [],
+    finalERRORS: [],
+    finalWARNINGS: []
+  };
+  this.subEntriesByTcIdx = {};
+  this.collapsedTestCases = {};
+  this.collapsedSections = {};
+  this.failuresIndex = {};
 
   const worker = new Worker(new URL('./parser/LogWorker.js', import.meta.url), {
     type: 'module',
@@ -872,25 +659,23 @@ isInsideTestCase(index) {
     data: this.logData,
   });
 
-  let globalIndex = 0; 
-const decoder = new TextDecoder('utf-8');
+  let globalIndex = 0;
+  const decoder = new TextDecoder('utf-8');
 
-  worker.onmessage = (e) => {
-  const { type, data, error } = e.data;
+ worker.onmessage = (e) => {
+  const { type, ...payload } = e.data;   
+
   switch (type) {
     case 'progress':
-      if (e.data.totalLines && e.data.processed) {
-        this.progress = Math.floor((e.data.processed / e.data.totalLines) * 100);
-        
-      } else {
-        this.progress = 0;
-      }
-      this.handleProgress(e.data);
+      this.progress = payload.totalLines
+        ? Math.floor((payload.processed || 0) / payload.totalLines * 100)
+        : 0;
+      this.handleProgress(payload);
       break;
 
     case 'batch':
-      if (data instanceof ArrayBuffer) {
-        const jsonStr = decoder.decode(new Uint8Array(data));
+      if (payload.data instanceof ArrayBuffer) {
+        const jsonStr = decoder.decode(new Uint8Array(payload.data));
         const parsed = JSON.parse(jsonStr);
 
         if (Array.isArray(parsed)) {
@@ -901,41 +686,45 @@ const decoder = new TextDecoder('utf-8');
           });
 
           if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => {
-              this.parsedEntries.push(...batch);
-            
-            });
+            requestIdleCallback(() => this.parsedEntries.push(...batch));
           } else {
             this.parsedEntries.push(...batch);
-            
           }
         }
       }
       break;
 
-case 'complete':
-  this.workerDone = true;
+    case 'meta':
+      
 
-  // On attend un tout petit peu pour s’assurer que les batchs sont rendus
-  setTimeout(async () => {
-    await this.$nextTick(); // Attendre le rendu DOM complet
-    this.progress = 100;
-    this.loading = false;
-    worker.terminate();
-  }, 50); // ou 100 ms si tu veux être encore plus safe
-  break;
+      this.finalSections     = payload.finalSections     || { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [] };
+      console.log("finalSections :", JSON.stringify(this.finalSections, null, 2));
+      this.subEntriesByTcIdx = payload.subEntriesByTcIdx || {};
+      this.collapsedTestCases = payload.collapseMap?.collapsedTestCases || {};
+      this.collapsedSections  = payload.collapseMap?.collapsedSections  || {};
+      this.failuresIndex      = payload.failuresIndex || {};
+      break;
+
+    case 'complete':
+      this.workerDone = true;
+      setTimeout(async () => {
+        await this.$nextTick();
+        this.progress = 100;
+        this.loading = false;
+        worker.terminate();
+      }, 50);
+      break;
 
     case 'error':
-      console.error("❌ Erreur du worker:", error);
+      console.error('❌ Erreur du worker:', payload.error);
       this.loading = false;
       worker.terminate();
       break;
   }
 };
 
-
   worker.onerror = (err) => {
-    console.error("❌ Erreur dans le worker (onerror):", err);
+    console.error('❌ Erreur dans le worker (onerror):', err);
     this.loading = false;
     worker.terminate();
   };
@@ -988,32 +777,115 @@ case 'complete':
 handleProgress(progressData) {
     const { processed, total } = progressData;
 
-    const elapsed = Date.now() - this.stats.startTime; // en ms
-    const speed = processed / elapsed; // lignes/ms
+    const elapsed = Date.now() - this.stats.startTime; 
+    const speed = processed / elapsed; 
 
     if (speed > 0) {
-      const remaining = (total - processed) / speed; // ms
+      const remaining = (total - processed) / speed; 
       console.log(`⏳ Temps restant estimé : ${Math.round(remaining / 1000)}s`);
     } else {
       console.log(`🔄 Calcul du temps restant en cours...`);
     }
   },
   },
-  mounted() {
-  this.initializeCollapsedStates();
-  
-}
-  };
+
+};
 </script>
 
 <style scoped>
-.loading-screen {
-  position: fixed;
-  top: 0;
-  left: 0;
+.search-container {
+  position: relative;
   width: 100%;
-  height: 100%;
-  background: white;
+}
+
+.search-bar {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #424242; 
+  border: 1px solid #333; 
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+  color: white; 
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #555; 
+}
+
+.suggestion-item:hover {
+  background-color: #5c5c5c;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+@keyframes flash {
+  0%   { background-color: #f8ec83; }
+  100% { background-color: transparent; }
+}
+
+::v-deep(.flash) {
+  background-color: #f3e781 !important;
+  transition: background-color 1.5s;
+  animation: flash 1.5s ease-in-out 3; 
+}
+.upload-block {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.loading-inline,
+.loading-screen {
+  --c1: #667eea;
+  --c2: #764ba2;
+  --c3: #f093fb;
+  --radius: 12px;
+  --shadow: 0 8px 32px rgba(102, 126, 234, .18);
+  --font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font);
+  letter-spacing: .02em;
+}
+
+.loading-inline {
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f7ff 100%);
+  border: 1px solid rgba(102, 126, 234, .15);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  transition: transform .25s ease;
+}
+
+.loading-inline:hover {
+  transform: translateY(-2px);
+}
+
+.loading-screen {
+  padding: 0;
+  margin: 0;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at 50% 50%, 
+              rgba(255, 255, 255, .8) 0%, 
+              rgba(240, 243, 255, .95) 100%);
+  backdrop-filter: blur(6px);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -1022,27 +894,59 @@ handleProgress(progressData) {
 }
 
 .progress-container {
-  width: 60%;
-  height: 20px;
-  background-color: #eee;
-  border-radius: 10px;
+  width: clamp(200px, 50vw, 420px);
+  height: 8px;
+  background: rgba(255, 255, 255, .6);
+  border-radius: 9999px;
   overflow: hidden;
-  margin-bottom: 10px;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .1),
+              0 0 0 1px rgba(255, 255, 255, .5);
+  margin-bottom: 14px;
+  position: relative;
 }
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
   width: 0%;
-  transition: width 0.2s ease-in-out;
+  background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3));
+  background-size: 200% 100%;
+  border-radius: inherit;
+  transition: width .4s cubic-bezier(.4, 0, .2, 1);
+  animation: shimmer 2s infinite linear;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 .progress-text {
-  font-size: 16px;
-  color: #333;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--c2);
+  opacity: .9;
+  animation: pulse 2.2s ease-in-out infinite;
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: .7; }
+  50%      { opacity: 1;   }
+}
+
+.loading-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--c1), var(--c2));
+  margin-bottom: 24px;
+  animation: float 1.6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1);   opacity: 1; }
+  50%      { transform: translateY(-10px) scale(1.2); opacity: .7; }
+}
 .button-group {
   display: flex;
   gap: 8px;
@@ -1155,10 +1059,19 @@ handleProgress(progressData) {
 
 .search-footer-content {
   overflow-y: auto;
-  padding: 10px 20px;
+  padding: 8px 12px;
   flex-grow: 1;
 }
-
+ .resize-handle {
+    width: 100%;
+    height: 6px;
+    background: #e0e0e0;
+    cursor: ns-resize;
+    flex-shrink: 0;
+    &:hover {
+      background: #bbb;
+    }
+  }
 .close-footer {
   border: none;
   background: transparent;
@@ -1238,12 +1151,14 @@ handleProgress(progressData) {
 
 
 .search-bar {
-  padding: 4px 12px;
+  padding: 4px 8px; 
   font-size: 14px;
-  border: 1px solid #ccc;
   border-radius: 6px;
-  width: 100px;
-  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  height: 28px; 
+  box-sizing: border-box;
+  width: 140px; 
+  margin-bottom: 0; 
 }
 
 .search-results {
@@ -1427,15 +1342,25 @@ h2 {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: #34495e;
+  background: #e5e6e7;
   color: white;
   padding: 8px 16px;
-  border-bottom: 1px solid #2c3e50;
+  border-bottom: 1px solid #5af1b2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .log-header h3 {
   margin: 0 0 10px 0;
