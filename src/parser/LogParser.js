@@ -802,7 +802,7 @@ name: "E-Sys cdDeploy TA started",
   pattern: "^.*Mirror Protocol preparation failed for given ECU:\\s*(ECUId:[^\\s]+)\\s*with return code:\\s*(\\d{1,3}).*$",
   type: "MirrorProtocolPrepFailed",
   color: "#ffcccb",
-  description: ((matches) => (parseInt(matches[2], 10).toString(16).toUpperCase().padStart(2, '0')))
+  description: "conversion to hexa"
 },
 
 ]; }
@@ -1165,15 +1165,24 @@ this.skipCurrentTestCaseLogs = false;
 
 
 
- detectHighlights(text) {
+detectHighlights(text) {
   const tokens = [];
   for (const rule of this.highlightDefinitions) {
     try {
       const regex = new RegExp(rule.pattern, "gi");
-      
+
       let match;
       while ((match = regex.exec(text)) !== null) {
         let description = rule.description;
+
+        // 🔧 Traitement spécial pour MirrorProtocolPrepFailed
+        if (rule.type === "MirrorProtocolPrepFailed") {
+          const returnCode = match[2]; // Groupe 2 = code de retour décimal
+          const hexCode = parseInt(returnCode, 10).toString(16).toUpperCase();
+          description = `return code (hex): 0x${hexCode}`;
+        }
+
+        // Gestion des multiDescriptions (inchangée)
         if (rule.multiDescriptions && rule.subPatterns) {
           const descriptions = [];
           rule.subPatterns.forEach(subPattern => {
@@ -1181,11 +1190,9 @@ this.skipCurrentTestCaseLogs = false;
             if (capturedValue && subPattern.descriptions[capturedValue.toUpperCase()]) {
               descriptions.push(`${subPattern.name}: ${subPattern.descriptions[capturedValue.toUpperCase()]}`);
             }
-            
           });
           if (descriptions.length > 0) {
             description = descriptions.join(' | ');
-
           }
         }
 
@@ -1194,14 +1201,14 @@ this.skipCurrentTestCaseLogs = false;
           end: match.index + match[0].length,
           type: rule.type,
           color: rule.color,
-          customDescription: description 
+          customDescription: description
         });
       }
     } catch (e) {
       console.error("Erreur regex:", rule.pattern, e);
     }
   }
-  
+
   return tokens;
 }
   detectHighlightsByType(text, targetType) {
