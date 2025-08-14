@@ -8,7 +8,8 @@ export class LogEntry {
     category = "standard", 
     highlightTokens = [],
     testCaseStatus = null,
-    currentTestCase = null
+    currentTestCase = null,
+    isFinalSectionContent = false
   }) {
     this.timestamp = timestamp;
     this.level = level;
@@ -24,8 +25,9 @@ export class LogEntry {
     this.isSecFail = category === "finalFAILURES";
     this.isSecERR = category === "finalERRORS";
     this.isSecWarr = category === "finalWARNINGS";
-    this.isFinalSection= category === "finalFAILURES" || category === "finalERRORS" || category === "finalWARNINGS";
-    this.isFinalSectionContent = false;
+    this.isSecInfo = category === "finalINFO";
+    this.isFinalSection= category === "finalFAILURES" || category === "finalERRORS" || category === "finalWARNINGS" || category === "finalINFO";
+    this.isFinalSectionContent = isFinalSectionContent;
     this.parentFinalSection = null;
 
 

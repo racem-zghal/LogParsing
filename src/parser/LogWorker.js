@@ -107,7 +107,7 @@ self.onmessage = async (e) => {
 
   for (let i = 0; i < totalChunks; i++) {
     const chunkStart = i * chunkSize;
-    const chunkEnd   = Math.min((i + 1) * chunkSize, lines.length);
+    const chunkEnd   = (i + 1) * chunkSize;
     const chunkData  = lines.slice(chunkStart, chunkEnd).join('\n');
 
     const cacheKey = simpleHash(chunkData);

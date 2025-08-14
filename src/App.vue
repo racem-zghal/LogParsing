@@ -86,7 +86,8 @@
         
         <div class="log-raw-content">
 
-
+        
+          
   <div
   v-for="(entry, idx) in parsedEntries"
   :key="entry.id"
@@ -113,48 +114,121 @@
     class="testcase-body"
   >
     <template v-for="(group, subIdx) in getSafeArray(subEntriesByTcIdx[idx])" :key="`group-${idx}-${subIdx}`">
+  <div
+    v-if="group && 'section' in group && group.section"
+    class="log-entry testcase-header section-header"
+    @click="toggleSection(idx, group.section)"
+    style="padding-left: 20px; cursor: pointer; background-color: #f0f0f0;"
+  >
+    <span class="toggle-icon">
+      {{ isSectionClosed(idx, group.section) ? '▶' : '▼' }}
+    </span>
+    <strong>
+      Live Log {{ group.section.charAt(0).toUpperCase() + group.section.slice(1) }}
+    </strong>
+  </div>
 
+  
+  <template v-if="group.section">
+    <template v-for="(lineEntry, lineIdx) in filteredLines(group.lines)" :key="`line-${idx}-${subIdx}-${lineIdx}`">
 
-
-    <div v-if="group && 'section' in group && group.section"
-        class="log-entry testcase-header section-header"
-        @click="toggleSection(idx, group.section)"
-        style="padding-left: 20px; cursor: pointer; background-color: #f0f0f0;"
-      >
-        <span class="toggle-icon">
-          {{ isSectionClosed(idx, group.section) ? '▼' : '▶' }}
-        </span>
-        <strong v-if="group.section">
-          Live Log {{ group.section.charAt(0).toUpperCase() + group.section.slice(1) }}
-        </strong>
-        <strong v-else>Live Log</strong>
-      </div>
-
-      <template v-if="group.section">
+      <template v-if="lineEntry.isIsocBlock">
         <div
-          v-for="(entry, lineIdx) in filteredLines(group.lines)"
-          :key="lineIdx"
-          :id="`main-line-${idx}-${lineIdx}`"
-         v-show="isSectionClosed(idx, group.section)"
+    class="log-entry"
+    style="padding-left: 30px; cursor: pointer; border-left: 3px solid #ccc;"
+    @click="toggleSection(idx, `${group.section}-isoc-${subIdx}-${lineIdx}`)"
+  >
+    <span class="toggle-icon" style="margin-right: 4px;">
+      {{ isSectionClosed(idx, `${group.section}-isoc-${subIdx}-${lineIdx}`) ? '▸' : '▾' }}
+    </span>
+    <span v-html="renderLine(lineEntry.lines[0])"></span>
+  </div>
+
+        <template v-for="(isocLine, isoIdx) in lineEntry.lines.slice(1)" :key="`isoc-${lineIdx}-${isoIdx}`">
+          <template v-if="isocLine.isResetBlock">
+           <div
           class="log-entry"
-          v-html="renderLine(entry)"
-          :class="{
-            'failed-line': entry.hasFailure
-          }"
-          @click=" scrollToFailureDetails(entry.rawLine , entry.parentTestCase)"
+          style="padding-left: 40px; cursor: pointer; border-left: 3px solid #4fc3f7;"
+          @click="toggleSection(idx, `${group.section}-isoc-${subIdx}-${lineIdx}-reset-${isoIdx}`)"
+        >
+          <span class="toggle-icon" style="margin-right: 4px;">
+            {{ isSectionClosed(idx, `${group.section}-isoc-${subIdx}-${lineIdx}-reset-${isoIdx}`) ? '▸' : '▾' }}
+          </span>
+          <span v-html="renderLine(isocLine.lines[0])"></span>
+        </div>
+
+            <div
+              v-for="(resetLine, rIdx) in isocLine.lines.slice(1)"
+              :key="`reset-${lineIdx}-${isoIdx}-${rIdx}`"
+              v-show="!isSectionClosed(idx, `${group.section}-isoc-${subIdx}-${lineIdx}-reset-${isoIdx}`)"
+              class="log-entry"
+              style="padding-left: 60px;"
+              v-html="renderLine(resetLine)"
+              :class="{ 'failed-line': resetLine.hasFailure }"
+              @click="scrollToFailureDetails(resetLine.rawLine, resetLine.parentTestCase)"
+            ></div>
+          </template>
+
+          <template v-else>
+            <div
+              v-show="!isSectionClosed(idx, `${group.section}-isoc-${subIdx}-${lineIdx}`)"
+              class="log-entry"
+              style="padding-left: 50px;"
+              v-html="renderLine(isocLine)"
+              :class="{ 'failed-line': isocLine.hasFailure }"
+              @click="scrollToFailureDetails(isocLine.rawLine, isocLine.parentTestCase)"
+            ></div>
+          </template>
+        </template>
+      </template>
+
+      <template v-else-if="lineEntry.isResetBlock">
+     <div
+    class="log-entry"
+    style="padding-left: 30px; cursor: pointer; border-left: 3px solid #4fc3f7;"
+    @click="toggleSection(idx, `${group.section}-reset-${subIdx}-${lineIdx}`)"
+  >
+    <span class="toggle-icon" style="margin-right: 4px;">
+      {{ isSectionClosed(idx, `${group.section}-reset-${subIdx}-${lineIdx}`) ? '▸' : '▾' }}
+    </span>
+    <span v-html="renderLine(lineEntry.lines[0])"></span>
+  </div>
+
+        <div
+          v-for="(resetLine, rIdx) in lineEntry.lines.slice(1)"
+          :key="`reset-${lineIdx}-${rIdx}`"
+          v-show="!isSectionClosed(idx, `${group.section}-reset-${subIdx}-${lineIdx}`)"
+          class="log-entry"
+          style="padding-left: 50px;"
+          v-html="renderLine(resetLine)"
+          :class="{ 'failed-line': resetLine.hasFailure }"
+          @click="scrollToFailureDetails(resetLine.rawLine, resetLine.parentTestCase)"
+        ></div>
+      </template>
+
+      <template v-else>
+        <div
+          v-show="!isSectionClosed(idx, group.section)"
+          class="log-entry"
+          v-html="renderLine(lineEntry)"
+          :class="{ 'failed-line': lineEntry.hasFailure }"
+          @click="scrollToFailureDetails(lineEntry.rawLine, lineEntry.parentTestCase)"
           style="padding-left: 30px; cursor: pointer;"
         ></div>
       </template>
 
-      <template v-if="!group.section">
-        <div
-          v-for="(entry, lineIdx) in group.lines"
-          :key="lineIdx"
-          class="log-entry"
-          v-html="renderLine(entry)"
-        ></div>
-      </template>
     </template>
+  </template>
+
+  <template v-else>
+    <div
+      v-for="(lineEntry, lineIdx) in group.lines"
+      :key="`line-${idx}-${lineIdx}`"
+      class="log-entry"
+      v-html="renderLine(lineEntry)"
+    ></div>
+  </template>
+</template>
   </div>
 
     
@@ -215,8 +289,26 @@
       ></div>
     </div>
   </div>
+  <div
+    v-if="entry.category === 'finalINFO' && entry.isFinalSection"
+    class="final-section"
+  >
+    <div @click="toggleFinalSection('finalINFO')" class="log-entry testcase-header">
+      <span class="toggle-icon">{{ collapsedFinalSections['finalINFO'] ? '▶' : '▼' }}</span>
+      <strong>{{ entry.message }}</strong>
+    </div>
+    <div v-show="!collapsedFinalSections['finalINFO']" class="section-content">
+      <div
+        v-for="(line, index) in finalSections.finalINFO"
+        :key="'info-content-' + index"
+        class="log-entry final-section-content"
+        v-html="renderLine(line)"
+        style="padding-left: 20px;"
+      ></div>
+    </div>
+  </div>
 
-       <div v-if="!entry.isTestCase && !entry.parentTestCase && !entry.isFinalSection && !entry.isFinalSectionContent && !(entry.currentTestCase)"
+       <div v-if="((entry.isTestCase===false)  && (entry.isFinalSection === false) && (entry.isFinalSectionContent === false) && (entry.currentTestCase === null))"
         class="log-entry"
         v-html="renderLine(entry)"
       >
@@ -287,7 +379,9 @@ export default {
       collapsedFinalSections: {
       finalFAILURES: true,
       finalERRORS: true,
-      finalWARNINGS: true},
+      finalWARNINGS: true,
+      finalINFO: true
+    },
       loading: false,
       progress: 0,
       searchFooterVisible: true,
@@ -455,7 +549,7 @@ collapseAllSections() {
   for (const tcIdx in this.collapsedSections) {
     newCollapsedSections[tcIdx] = {};
     for (const section in this.collapsedSections[tcIdx]) {
-      newCollapsedSections[tcIdx][section] =false;
+      newCollapsedSections[tcIdx][section] =true;
     }
   }
   this.collapsedSections = newCollapsedSections;
@@ -477,7 +571,7 @@ expandAllSections() {
   for (const tcIdx in this.collapsedSections) {
     newCollapsedSections[tcIdx] = {};
     for (const section in this.collapsedSections[tcIdx]) {
-      newCollapsedSections[tcIdx][section] = true; 
+      newCollapsedSections[tcIdx][section] =false; 
     }
   }
   this.collapsedSections = newCollapsedSections;
@@ -596,12 +690,6 @@ isSectionClosed(tcIndex, section) {
 },
 
 
-isInsideTestCase(index) {
-  for (let i = index - 1; i >= 0; i--) {
-    if (this.parsedEntries[i].isTestCase && !(this.parsedEntries[i].isSecFailERR)) return true;
-  }
-  return false;
-},
 
     renderLine(entry) {
   const text = escapeHtml(entry.rawLine || entry.message || '');
@@ -639,7 +727,8 @@ isInsideTestCase(index) {
   this.finalSections = {
     finalFAILURES: [],
     finalERRORS: [],
-    finalWARNINGS: []
+    finalWARNINGS: [],
+    finalInfo: [],
   };
   this.subEntriesByTcIdx = {};
   this.collapsedTestCases = {};
@@ -674,31 +763,29 @@ isInsideTestCase(index) {
       break;
 
     case 'batch':
-      if (payload.data instanceof ArrayBuffer) {
-        const jsonStr = decoder.decode(new Uint8Array(payload.data));
-        const parsed = JSON.parse(jsonStr);
+  if (payload.data instanceof ArrayBuffer) {
+    const jsonStr = decoder.decode(new Uint8Array(payload.data));
+    const parsed = JSON.parse(jsonStr);
 
-        if (Array.isArray(parsed)) {
-          const batch = parsed.map(obj => {
-            const entry = new LogEntry(obj);
-            entry.id = globalIndex++;
-            return entry;
-          });
-
-          if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => this.parsedEntries.push(...batch));
-          } else {
-            this.parsedEntries.push(...batch);
-          }
-        }
+    if (Array.isArray(parsed)) {
+      const batch = parsed.map(obj => {
+        const entry = new LogEntry(obj);
+        entry.id = globalIndex++;
+        return entry;
+      });
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => this.parsedEntries.push(...batch));
+      } else {
+        this.parsedEntries.push(...batch);
       }
-      break;
+    }
+  }
+  break;
 
     case 'meta':
       
 
-      this.finalSections     = payload.finalSections     || { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [] };
-      console.log("finalSections :", JSON.stringify(this.finalSections, null, 2));
+      this.finalSections     = payload.finalSections     || { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [], finalINFO: [] };
       this.subEntriesByTcIdx = payload.subEntriesByTcIdx || {};
       this.collapsedTestCases = payload.collapseMap?.collapsedTestCases || {};
       this.collapsedSections  = payload.collapseMap?.collapsedSections  || {};

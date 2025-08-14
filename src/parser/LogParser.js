@@ -22,10 +22,13 @@ export class LogParser {
         "short test summary info" ,/^\s*=+\s*short\s+test\s+summary\s+info\s*=+\s*$/), 
         ];
       this.highlightDefinitions = []; 
+      
     this.currentTestCase = null;
     this.testCaseResults = new Map();
     this.skipCurrentTestCaseLogs = false;
-    this.ready = this.loadHighlightRules(); 
+    this.isfisec = false;
+    this.isfinalcontent = false;
+    this.ready = this.loadHighlightRules();
   }
 
  async loadHighlightRules() {
@@ -837,8 +840,8 @@ name: "E-Sys cdDeploy TA started",
         return this.processErrorsSection(line);
       } else if (rule.name === "warnings summary") {
         return this.processWarningsSection(line);
-      }else if (rule.name === "short test summary info") {
-        return this.processWarningsSection(line);
+      } else if (rule.name === "short test summary info") {
+        return this.processInfoSection(line);
       }
     }
     return this.processUnmatchedLine(line);
@@ -883,7 +886,11 @@ this.skipCurrentTestCaseLogs = false;
     color: token.color,
     customDescription: token.customDescription || "",
   }));
+  
   const category = this.determineCategory(messageTokensRaw);
+  if (this.isfisec === true) {
+    this.isfinalcontent = true;
+  }
   return new LogEntry({
     timestamp: match[1],
     level: this.mapLevel(match[2]),
@@ -892,8 +899,10 @@ this.skipCurrentTestCaseLogs = false;
     rawLine: line,
     category: category,
     currentTestCase: this.currentTestCase,
-    highlightTokens: messageTokens 
+    highlightTokens: messageTokens,
+    isFinalSectionContent: this.isfinalcontent
   });
+
 }
 
 
@@ -901,6 +910,9 @@ this.skipCurrentTestCaseLogs = false;
     if (this.skipCurrentTestCaseLogs) return null;
     const highlightTokens = this.detectHighlights(line);
     const category = this.determineCategory(highlightTokens);
+     if (this.isfisec === true) {
+    this.isfinalcontent = true;
+  }
     return new LogEntry({
       timestamp: "",
       level: "",
@@ -908,10 +920,15 @@ this.skipCurrentTestCaseLogs = false;
       message: line,
       category: category,
       currentTestCase: this.currentTestCase,
-      highlightTokens: highlightTokens
+      highlightTokens: highlightTokens,
+      isFinalSectionContent: this.isfinalcontent
     });
   }
   processFailuresSection(line) {
+    this.isfisec=true;
+
+    this.isfinalcontent=true;
+    this.skipCurrentTestCaseLogs=false;
     const highlightTokens = this.detectHighlights(line);
     const category = "finalFAILURES";
     return new LogEntry({
@@ -925,6 +942,11 @@ this.skipCurrentTestCaseLogs = false;
     });
   }
   processErrorsSection(line) {
+    this.isfisec=true;
+
+    this.isfinalcontent = true;
+    this.skipCurrentTestCaseLogs = false;
+    this.currentTestCase = null;
     const highlightTokens = this.detectHighlights(line);
     const category = "finalERRORS";
     return new LogEntry({
@@ -939,8 +961,31 @@ this.skipCurrentTestCaseLogs = false;
   }
 
   processWarningsSection(line) {
+    this.isfisec=true;
+
+    this.isfinalcontent=true;
+    this.skipCurrentTestCaseLogs=false;
+    this.currentTestCase=null;
     const highlightTokens = this.detectHighlights(line);
     const category = "finalWARNINGS";
+    return new LogEntry({
+      timestamp: "",
+      level: "INFO",
+      module: "",
+      message: line,
+      category: category,
+      currentTestCase: null,
+      highlightTokens: highlightTokens
+    });
+  }
+  processInfoSection(line) {
+            this.isfisec=true;
+
+    this.skipCurrentTestCaseLogs=false;
+    this.isfinalcontent=true;
+    this.currentTestCase=null;
+    const highlightTokens = this.detectHighlights(line);
+    const category = "finalINFO";
     return new LogEntry({
       timestamp: "",
       level: "INFO",
@@ -1215,12 +1260,10 @@ export function buildCollapseMap(entries) {
 }
 
 export function buildFinalSections(entries) {
-  const out = { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [] };
+  const out = { finalFAILURES: [], finalERRORS: [], finalWARNINGS: [], finalINFO: [] };
   let cur = null;
-
   for (const e of entries) {
     if (e.category === "finalFAILURES") { 
-      console.log("Building final section for failures:", e);
       cur = "finalFAILURES"; 
       e.isFinalSection = true;
       e.currentTestCase=null;
@@ -1228,7 +1271,6 @@ export function buildFinalSections(entries) {
       continue; 
     }
     if (e.category === "finalERRORS") { 
-      console.log("Building final section for errors:", e);
       cur = "finalERRORS";   
       e.isFinalSection = true;
       e.currentTestCase=null;
@@ -1236,8 +1278,14 @@ export function buildFinalSections(entries) {
       continue; 
     }
     if (e.category === "finalWARNINGS") { 
-      console.log("Building final section for warnings:", e);
       cur = "finalWARNINGS"; 
+      e.isFinalSection = true;
+      e.currentTestCase=null;
+      e.parentTestCase=null;
+      continue; 
+    }
+    if (e.category === "finalINFO") { 
+      cur = "finalINFO"; 
       e.isFinalSection = true;
       e.currentTestCase=null;
       e.parentTestCase=null;
@@ -1245,7 +1293,6 @@ export function buildFinalSections(entries) {
     }
 
     if (cur) {
-      console.log("Adding entry to final section:", e, "in section", cur);
       e.isFinalSectionContent = true;
       e.currentTestCase=null;
       e.parentTestCase=null;
@@ -1253,7 +1300,6 @@ export function buildFinalSections(entries) {
       out[cur].push(e);
     }
   }
-  console.log("Final sections built:", JSON.stringify(out, null, 2));
   return out;
 }
 
@@ -1285,20 +1331,44 @@ export function buildSubEntriesByTcIdx(entries) {
   let currentSection = null;
   let currentLines = [];
 
+  // États pour la détection de blocs
+  let insideIsoc = false;
+  let isocBuffer = [];
+  let insideReset = false;
+  let resetBuffer = [];
+
+  const flushCurrentSection = () => {
+    if (currentSection && currentLines.length) {
+      if (!map[currentTcIdx]) map[currentTcIdx] = [];
+      map[currentTcIdx].push({
+        section: currentSection,
+        lines: [...currentLines],
+        hasFailure: currentLines.some(l => l.hasFailure)
+      });
+      currentLines = [];
+    }
+  };
+
+  const resetContentPattern = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[INF\] \[\/dev\/ttyUSB_SIPDBG_02\]/;
+
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
+    const msg = String(e.message || '');
 
+    // Détection de test case
     if (e.isTestCase) {
-      if (currentTcIdx !== null) {
-        if (!map[currentTcIdx]) map[currentTcIdx] = [];
-        if (currentSection && currentLines.length) {
-          map[currentTcIdx].push({
-            section: currentSection,
-            lines: [...currentLines],
-            hasFailure: currentLines.some(l => l.hasFailure)
-          });
-        }
+      if (insideIsoc) {
+        currentLines.push({ isIsocBlock: true, lines: [...isocBuffer] });
+        isocBuffer = [];
+        insideIsoc = false;
       }
+      if (insideReset) {
+        currentLines.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+        resetBuffer = [];
+        insideReset = false;
+      }
+      flushCurrentSection();
+
       currentTcIdx = i;
       currentSection = null;
       currentLines = [];
@@ -1308,29 +1378,125 @@ export function buildSubEntriesByTcIdx(entries) {
 
     if (currentTcIdx === null) continue;
 
+    // Détection de final section
     if (typeof e.isFinalSection === "function" ? e.isFinalSection() : e.isFinalSection) {
-      if (currentSection && currentLines.length) {
-        map[currentTcIdx].push({
-          section: currentSection,
-          lines: [...currentLines],
-          hasFailure: currentLines.some(l => l.hasFailure)
-        });
+      if (insideIsoc) {
+        currentLines.push({ isIsocBlock: true, lines: [...isocBuffer] });
+        isocBuffer = [];
+        insideIsoc = false;
       }
-      currentTcIdx = null; 
+      if (insideReset) {
+        currentLines.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+        resetBuffer = [];
+        insideReset = false;
+      }
+      flushCurrentSection();
+
+      currentTcIdx = null;
       currentSection = null;
       currentLines = [];
       continue;
     }
 
+    // ----- iSOC logic -----
+    if (
+      msg.includes('***Start: iSOC Status Check before Test Setup***') ||
+      msg.includes('***Start: iSOC Status Check after Test Teardown and peform corrective action if needed***')
+    ) {
+      insideIsoc = true;
+      e.isFoldableHeader = true;
+      isocBuffer = [e];
+      continue;
+    }
+
+    if (
+      /End:\s*iSOC Status Check before Test Setup.*\*\*\*/.test(msg) ||
+      /End:\s*iSOC Status Check after Test Teardown.*\*\*\*/.test(msg)
+    ) {
+      insideIsoc = false;
+      isocBuffer.push(e);
+      currentLines.push({ isIsocBlock: true, lines: [...isocBuffer] });
+      isocBuffer = [];
+      continue;
+    }
+
+    if (insideIsoc) {
+      // Reset start inside iSOC
+      if (!insideReset && msg.includes('Since Boot(Power On Reset)') && /\[\/dev\/ttyUSB_SIPDBG_02\]/.test(msg)) {
+        insideReset = true;
+        e.isFoldableHeader = true;
+        resetBuffer = [e];
+        continue;
+      }
+
+      if (insideReset) {
+        const endReset = msg.trim() === '' || e.isTestCase || (typeof e.isFinalSection === "function" ? e.isFinalSection() : e.isFinalSection);
+        if (endReset) {
+          insideReset = false;
+          isocBuffer.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+          resetBuffer = [];
+
+          if (!(e.isTestCase || (typeof e.isFinalSection === "function" ? e.isFinalSection() : e.isFinalSection)) && msg.trim() !== '') {
+            isocBuffer.push(e);
+          }
+          continue;
+        }
+
+        if (resetContentPattern.test(msg)) {
+          resetBuffer.push(e);
+          continue;
+        }
+
+        insideReset = false;
+        isocBuffer.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+        resetBuffer = [];
+        isocBuffer.push(e);
+        continue;
+      }
+
+      isocBuffer.push(e);
+      continue;
+    }
+    // ----- end iSOC logic -----
+
+    // ----- Reset logic outside iSOC -----
+    if (!insideReset && msg.includes('Since Boot(Power On Reset)') && /\[\/dev\/ttyUSB_SIPDBG_02\]/.test(msg)) {
+      insideReset = true;
+      e.isFoldableHeader = true;
+      resetBuffer = [e];
+      continue;
+    }
+
+    if (insideReset) {
+      const endReset = msg.trim() === '' || e.isTestCase || (typeof e.isFinalSection === "function" ? e.isFinalSection() : e.isFinalSection);
+      if (endReset) {
+        insideReset = false;
+        currentLines.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+        resetBuffer = [];
+
+        if (!(e.isTestCase || (typeof e.isFinalSection === "function" ? e.isFinalSection() : e.isFinalSection)) && msg.trim() !== '') {
+          currentLines.push(e);
+        }
+        continue;
+      }
+
+      if (resetContentPattern.test(msg)) {
+        resetBuffer.push(e);
+        continue;
+      }
+
+      insideReset = false;
+      currentLines.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+      resetBuffer = [];
+      currentLines.push(e);
+      continue;
+    }
+    // ----- end Reset logic -----
+
+    // Gestion des sections
     const sec = e.section;
     if (sec && sec !== currentSection) {
-      if (currentSection && currentLines.length) {
-        map[currentTcIdx].push({
-          section: currentSection,
-          lines: [...currentLines],
-          hasFailure: currentLines.some(l => l.hasFailure)
-        });
-      }
+      flushCurrentSection();
       currentSection = sec;
       currentLines = [e];
     } else {
@@ -1338,17 +1504,18 @@ export function buildSubEntriesByTcIdx(entries) {
     }
   }
 
-  if (currentTcIdx !== null && currentSection && currentLines.length) {
-    map[currentTcIdx].push({
-      section: currentSection,
-      lines: [...currentLines],
-      hasFailure: currentLines.some(l => l.hasFailure)
-    });
+  if (currentTcIdx !== null) {
+    if (insideIsoc) {
+      currentLines.push({ isIsocBlock: true, lines: [...isocBuffer] });
+    }
+    if (insideReset) {
+      currentLines.push({ isResetBlock: true, lines: [...resetBuffer], isFoldableHeader: true });
+    }
+    flushCurrentSection();
   }
-  
+
   return map;
 }
-
 
 function getSectionName(line = "") {
   const msg = line.toLowerCase();
