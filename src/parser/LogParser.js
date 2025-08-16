@@ -1175,14 +1175,12 @@ detectHighlights(text) {
       while ((match = regex.exec(text)) !== null) {
         let description = rule.description;
 
-        // 🔧 Traitement spécial pour MirrorProtocolPrepFailed
         if (rule.type === "MirrorProtocolPrepFailed") {
-          const returnCode = match[2]; // Groupe 2 = code de retour décimal
+          const returnCode = match[2]; 
           const hexCode = parseInt(returnCode, 10).toString(16).toUpperCase();
           description = `return code (hex): 0x${hexCode}`;
         }
 
-        // Gestion des multiDescriptions (inchangée)
         if (rule.multiDescriptions && rule.subPatterns) {
           const descriptions = [];
           rule.subPatterns.forEach(subPattern => {
